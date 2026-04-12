@@ -623,6 +623,16 @@ function DetailPage({product:p,nav,addToCart,cartCount}:{product:any,nav:(pg:str
 // ═══════════════════════════════════════════════════════════
 // PAGE: CHECKOUT
 // ═══════════════════════════════════════════════════════════
+function Field({label,id,required,error,...props}:any){
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:4}}>
+      <label style={{fontSize:12,fontWeight:600,color:error?C.red:C.ink3,letterSpacing:'0.04em'}}>{label}{required&&<span style={{color:C.red}}> *</span>}</label>
+      <input id={id} {...props} style={{padding:'10px 13px',border:`1px solid ${error?C.red:C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',background:C.white,color:C.ink}}/>
+      {error&&<span style={{fontSize:11,color:C.red}}>{error}</span>}
+    </div>
+  )
+}
+
 function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void,cart:any[],addToCart:(item:any)=>void}) {
   const [step,setStep]=useState(0)
   const [cart,setCart]=useState(initCart.length>0?initCart:[{cartId:'c1',id:'TEA-001',name:'Court Precision Polo',sport:'Tennis',emoji:'🎾',price:649000,size:'M',color:'Forest',qty:1},{cartId:'c2',id:'TEA-007',name:'Pace Setter Shorts',sport:'Running',emoji:'🏃',price:429000,size:'L',color:'Black',qty:1}])
@@ -677,13 +687,7 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
       setPlacing(false)
     }
   }
-  const Field=({label,id,required,error,...props}:any)=>(
-    <div style={{display:'flex',flexDirection:'column',gap:4}}>
-      <label style={{fontSize:12,fontWeight:600,color:error?C.red:C.ink3,letterSpacing:'0.04em'}}>{label}{required&&<span style={{color:C.red}}> *</span>}</label>
-      <input id={id} {...props} style={{padding:'10px 13px',border:`1px solid ${error?C.red:C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',background:C.white,color:C.ink}}/>
-      {error&&<span style={{fontSize:11,color:C.red}}>{error}</span>}
-    </div>
-  )
+
   const Summary=()=>(
     <aside className="checkout-summary" style={{width:300,flexShrink:0}}>
       <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:14,overflow:'hidden',position:'sticky',top:80}}>
