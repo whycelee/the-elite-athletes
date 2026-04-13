@@ -17,7 +17,6 @@ export async function GET(req: Request) {
     const { data, error } = await query
     if (error) throw error
 
-    // Filter sport — check both main sport and tags array
     const result = sport
       ? data.filter(p =>
           p.sport === sport ||
@@ -34,7 +33,8 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { name, sku, sport, gender, price, hpp, emoji, desc, sizes, colors, tags } = body
+    const { name, sku, sport, gender, price, hpp, original, emoji, desc,
+            sizes, colors, tags, image_url, initial_stock } = body
 
     if (!name || !sku || !price) {
       return NextResponse.json({ error: 'name, sku, price wajib diisi' }, { status: 400 })
@@ -46,33 +46,34 @@ export async function POST(req: Request) {
       .from('products')
       .insert({
         id,
-        sku:         sku.toUpperCase(),
+        sku:            sku.toUpperCase(),
         name,
         sport,
         gender,
-        price:       parseInt(price),
-        hpp:         parseInt(hpp) || 0,
-        emoji:       emoji || '👕',
-        description: desc || '',
-        sizes:       sizes || ['S','M','L','XL'],
-        colors:      colors || ['Black'],
-        tags:        tags || [],   // multi-sport tags
-        status:      'active',
-        rating:      5.0,
-        review_count: 0,
+        price:          parseInt(price),
+        original_price: original ? parseInt(original) : null,
+        hpp:            parseInt(hpp) || 0,
+        emoji:          emoji || '👕',
+        description:    desc || '',
+        sizes:          sizes || ['S','M','L','XL'],
+        colors:         colors || ['Black'],
+        tags:           tags || [],
+        image_url:      image_url || null,
+        status:         'active',
+        rating:         5.0,
+        review_count:   0,
       })
       .select()
       .single()
 
     if (prodErr) throw prodErr
 
-    // Insert stok awal 0 untuk setiap ukuran
+    // Insert stock — use initial_stock if provided, else 0
     const stockRows = (sizes || ['S','M','L','XL']).map((size: string) => ({
       product_id: id,
       size,
-      quantity:   0,
+      quantity: initial_stock?.[size] ?? 0,
     }))
-
     await supabaseAdmin.from('stock').insert(stockRows)
 
     return NextResponse.json({ data: product }, { status: 201 })

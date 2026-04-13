@@ -1093,6 +1093,44 @@ function AdminOrders({orders:initO}:{orders:any[]}) {
   </div>
 }
 
+function StockModal({product:p,onSave,onClose}:{product:any,onSave:(id:string,s:any)=>void,onClose:()=>void}){
+  const [stock,setStock]=useState<Record<string,number>>({...p.stock})
+  const total=Object.values(stock).reduce((s:number,n:number)=>s+n,0)
+  return <div style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+    <div style={{background:C.white,borderRadius:16,width:'min(440px,95vw)',padding:'22px 24px',display:'flex',flexDirection:'column',gap:16}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+        <div><h3 style={{margin:'0 0 3px',fontSize:15,fontWeight:700,color:C.ink}}>{p.emoji} {p.name}</h3><p style={{margin:0,fontSize:11,color:C.ink4}}>{p.sku}</p></div>
+        <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:17,color:C.ink3,padding:'2px 5px'}}>✕</button>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(90px,1fr))',gap:10}}>
+        {Object.entries(stock).map(([sz,qty])=>(
+          <div key={sz} style={{textAlign:'center'}}>
+            <label style={{display:'block',fontSize:10,fontWeight:700,color:C.ink3,marginBottom:5,letterSpacing:'0.06em',textTransform:'uppercase'}}>Size {sz}</label>
+            <div style={{display:'flex',alignItems:'center',border:`1.5px solid ${C.ink5}`,borderRadius:8,overflow:'hidden',background:C.cream}}>
+              <button onClick={()=>setStock(s=>({...s,[sz]:Math.max(0,(s[sz]||0)-1)}))} style={{width:28,background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'6px 0',color:C.ink2,lineHeight:1}}>−</button>
+              <input
+                type="number" min={0} value={qty}
+                onChange={e=>setStock(s=>({...s,[sz]:Math.max(0,parseInt(e.target.value)||0)}))}
+                onFocus={e=>e.target.select()}
+                style={{flex:1,width:0,textAlign:'center',border:'none',background:'transparent',fontSize:13,fontWeight:700,color:C.ink,fontFamily:'inherit',outline:'none',padding:'6px 0'}}
+              />
+              <button onClick={()=>setStock(s=>({...s,[sz]:(s[sz]||0)+1}))} style={{width:28,background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'6px 0',color:C.ink2,lineHeight:1}}>+</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{background:C.g50,borderRadius:9,padding:'10px 14px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <span style={{fontSize:13,color:C.ink3}}>Total setelah edit</span>
+        <span style={{fontSize:15,fontWeight:800,color:C.g700}}>{total} unit</span>
+      </div>
+      <div style={{display:'flex',gap:9,justifyContent:'flex-end'}}>
+        <button onClick={onClose} style={{padding:'9px 18px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
+        <button onClick={()=>onSave(p.id,stock)} style={{padding:'9px 22px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>Simpan</button>
+      </div>
+    </div>
+  </div>
+}
+
 function AdminInventory({products:initP}:{products:any[]}) {
   const [products,setProducts]=useState(initP)
   useEffect(()=>{
@@ -1108,7 +1146,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
   const [statusF,setStatusF]=useState('all')
   const [editProd,setEditProd]=useState<any>(null)
   const [showAdd,setShowAdd]=useState(false)
-  const [newProd,setNewProd]=useState({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',emoji:'👕',sizes:'S,M,L,XL',colors:'Black,White',desc:'',extraSports:'',hasSizes:true,hasColors:true})
+  const [newProd,setNewProd]=useState({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',original:'',emoji:'👕',sizes:'S,M,L,XL',colors:'Black,White',desc:'',extraSports:'',hasSizes:true,hasColors:true})
   const [imageFile,setImageFile]=useState<File|null>(null)
   const [imagePreview,setImagePreview]=useState<string|null>(null)
   const [uploadingImg,setUploadingImg]=useState(false)
@@ -1130,31 +1168,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
     }))
     setEditProd(null)
   }
-  const StockModal=({product:p,onSave,onClose}:{product:any,onSave:(id:string,s:any)=>void,onClose:()=>void})=>{
-    const [stock,setStock]=useState({...p.stock})
-    return <div style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,0.35)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-      <div style={{background:C.white,borderRadius:16,width:'min(420px,95vw)',padding:'22px 24px',display:'flex',flexDirection:'column',gap:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}><div><h3 style={{margin:'0 0 3px',fontSize:15,fontWeight:700,color:C.ink}}>{p.emoji} {p.name}</h3><p style={{margin:0,fontSize:11,color:C.ink4}}>{p.sku}</p></div><button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:17,color:C.ink3,padding:'2px 5px'}}>✕</button></div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(85px,1fr))',gap:9}}>
-          {Object.entries(stock).map(([sz,qty]:any)=>(
-            <div key={sz} style={{textAlign:'center'}}>
-              <label style={{display:'block',fontSize:10,fontWeight:700,color:C.ink3,marginBottom:5,letterSpacing:'0.06em',textTransform:'uppercase'}}>Size {sz}</label>
-              <div style={{display:'flex',alignItems:'center',border:`1px solid ${C.ink5}`,borderRadius:8,overflow:'hidden',background:C.cream}}>
-                <button onClick={()=>setStock((s:any)=>({...s,[sz]:Math.max(0,s[sz]-1)}))} style={{flex:1,background:'none',border:'none',cursor:'pointer',fontSize:15,padding:'6px',color:C.ink2}}>−</button>
-                <input type="number" min={0} value={qty} onChange={e=>setStock((s:any)=>({...s,[sz]:Math.max(0,parseInt(e.target.value)||0)}))} style={{width:34,textAlign:'center',border:'none',background:'transparent',fontSize:13,fontWeight:700,color:C.ink,fontFamily:'inherit',outline:'none'}}/>
-                <button onClick={()=>setStock((s:any)=>({...s,[sz]:s[sz]+1}))} style={{flex:1,background:'none',border:'none',cursor:'pointer',fontSize:15,padding:'6px',color:C.ink2}}>+</button>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{background:C.g50,borderRadius:9,padding:'9px 13px',display:'flex',justifyContent:'space-between'}}><span style={{fontSize:13,color:C.ink3}}>Total setelah edit</span><span style={{fontSize:14,fontWeight:800,color:C.g700}}>{Object.values(stock as Record<string,number>).reduce((s,n)=>s+n,0)} unit</span></div>
-        <div style={{display:'flex',gap:9,justifyContent:'flex-end'}}>
-          <button onClick={onClose} style={{padding:'9px 18px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
-          <button onClick={()=>onSave(p.id,stock)} style={{padding:'9px 20px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>Simpan</button>
-        </div>
-      </div>
-    </div>
-  }
+
   const sums=[{l:'Total SKUs',v:products.length,col:C.ink},{l:'Active',v:products.filter((p:any)=>p.status==='active').length,col:C.g600},{l:'Low/Critical',v:products.filter((p:any)=>['low','critical'].includes(p.status)).length,col:C.amber},{l:'Out of Stock',v:products.filter((p:any)=>p.status==='out').length,col:C.red},{l:'Total Units',v:products.reduce((s:number,p:any)=>s+totStock(p),0),col:C.blue}]
   async function uploadImage(file:File, sku:string):Promise<string|null>{
     try{
@@ -1179,21 +1193,29 @@ function AdminInventory({products:initP}:{products:any[]}) {
       const sizesArr=newProd.hasSizes?newProd.sizes.split(',').map((s:string)=>s.trim()).filter(Boolean):['One Size']
       const colorsArr=newProd.hasColors?newProd.colors.split(',').map((s:string)=>s.trim()).filter(Boolean):['Default']
       const tagsArr=newProd.extraSports?newProd.extraSports.split(',').map((s:string)=>s.trim()).filter(Boolean):[]
+      // Read initial stock from inputs
+      const initialStock:Record<string,number>={}
+      sizesArr.forEach((sz:string)=>{
+        const el=document.getElementById(`stock-${sz}`) as HTMLInputElement
+        initialStock[sz]=el?parseInt(el.value)||0:0
+      })
       // Upload image first if any
       let imageUrl:string|null=null
       if(imageFile) imageUrl=await uploadImage(imageFile, newProd.sku||'product')
       const res=await fetch('/api/products',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
         name:newProd.name,sku:newProd.sku,sport:newProd.sport,gender:newProd.gender,
         price:parseInt(newProd.price),hpp:parseInt(newProd.hpp)||0,
+        original:newProd.original?parseInt(newProd.original):null,
         emoji:newProd.emoji,desc:newProd.desc,
         sizes:sizesArr,colors:colorsArr,
-        tags:tagsArr,image_url:imageUrl
+        tags:tagsArr,image_url:imageUrl,
+        initial_stock:initialStock
       })})
       const d=await res.json()
       if(res.ok){
         if(d.data) setProducts((p:any[])=>[...p,{...d.data,stock:{},status:'active',image_url:imageUrl}])
         setShowAdd(false)
-        setNewProd({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',emoji:'👕',sizes:'S,M,L,XL',colors:'Black,White',desc:'',extraSports:'',hasSizes:true,hasColors:true})
+        setNewProd({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',original:'',emoji:'👕',sizes:'S,M,L,XL',colors:'Black,White',desc:'',extraSports:'',hasSizes:true,hasColors:true})
         setImageFile(null)
         setImagePreview(null)
         alert('Produk berhasil ditambahkan!')
@@ -1213,6 +1235,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
             {label:'Nama Produk *',key:'name',placeholder:'Court Precision Polo'},
             {label:'SKU *',key:'sku',placeholder:'TEA-TEN-011'},
             {label:'Harga Jual *',key:'price',placeholder:'649000',type:'number'},
+            {label:'Harga Asli / Sebelum Diskon (opsional)',key:'original',placeholder:'890000',type:'number'},
             {label:'HPP / Modal',key:'hpp',placeholder:'280000',type:'number'},
             {label:'Emoji',key:'emoji',placeholder:'👕'},
             {label:'Deskripsi',key:'desc',placeholder:'Deskripsi singkat produk...'},
@@ -1223,6 +1246,17 @@ function AdminInventory({products:initP}:{products:any[]}) {
               <input type={f.type||'text'} value={(newProd as any)[f.key]} placeholder={f.placeholder} onChange={e=>setNewProd(p=>({...p,[f.key]:e.target.value}))} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
             </div>
           ))}
+          {/* DISCOUNT PREVIEW */}
+          {newProd.price&&newProd.original&&parseInt(newProd.original)>parseInt(newProd.price)&&(
+            <div style={{background:C.g50,border:`1px solid ${C.g200}`,borderRadius:9,padding:'10px 14px',display:'flex',alignItems:'center',gap:10}}>
+              <span style={{fontSize:13,fontWeight:700,color:C.g700}}>{fmt(parseInt(newProd.price))}</span>
+              <span style={{fontSize:12,color:C.ink4,textDecoration:'line-through'}}>{fmt(parseInt(newProd.original))}</span>
+              <span style={{fontSize:11,fontWeight:700,background:C.red,color:'#fff',padding:'2px 7px',borderRadius:5}}>
+                -{Math.round((1-parseInt(newProd.price)/parseInt(newProd.original))*100)}% OFF
+              </span>
+            </div>
+          )}
+
           {/* IMAGE UPLOAD */}
           <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
             <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:8}}>Foto Produk</label>
@@ -1249,6 +1283,17 @@ function AdminInventory({products:initP}:{products:any[]}) {
               </div>
             </div>
           </div>
+
+          {/* DISCOUNT PREVIEW */}
+          {newProd.price&&newProd.original&&parseInt(newProd.original)>parseInt(newProd.price)&&(
+            <div style={{background:C.g50,border:`1px solid ${C.g200}`,borderRadius:9,padding:'10px 14px',display:'flex',alignItems:'center',gap:10}}>
+              <span style={{fontSize:13,fontWeight:700,color:C.g700}}>{fmt(parseInt(newProd.price))}</span>
+              <span style={{fontSize:12,color:C.ink4,textDecoration:'line-through'}}>{fmt(parseInt(newProd.original))}</span>
+              <span style={{fontSize:11,fontWeight:700,background:C.red,color:'#fff',padding:'2px 7px',borderRadius:5}}>
+                -{Math.round((1-parseInt(newProd.price)/parseInt(newProd.original))*100)}% OFF
+              </span>
+            </div>
+          )}
 
           {/* IMAGE UPLOAD */}
           <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
@@ -1316,6 +1361,25 @@ function AdminInventory({products:initP}:{products:any[]}) {
               <span style={{fontSize:10,color:C.ink4,marginTop:4,display:'block'}}>Klik quick-select di atas atau ketik manual. Pisahkan dengan koma.</span>
             </>}
           </div>
+
+          {/* INITIAL STOCK */}
+          {newProd.hasSizes&&newProd.sizes&&(
+            <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+              <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:8}}>Stok Awal per Ukuran</label>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(80px,1fr))',gap:8}}>
+                {newProd.sizes.split(',').map((s:string)=>s.trim()).filter(Boolean).map((sz:string)=>(
+                  <div key={sz} style={{textAlign:'center'}}>
+                    <label style={{display:'block',fontSize:10,fontWeight:700,color:C.ink4,marginBottom:4,textTransform:'uppercase'}}>{sz}</label>
+                    <input
+                      type="number" min={0} defaultValue={0}
+                      id={`stock-${sz}`}
+                      style={{width:'100%',padding:'7px 4px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:13,fontWeight:700,textAlign:'center',fontFamily:'inherit',outline:'none',color:C.ink,background:C.white}}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* COLORS SECTION */}
           <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
