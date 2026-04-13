@@ -71,7 +71,16 @@ const PAYMENT_METHODS = [
   {id:'midtrans',label:'Kartu Kredit/Debit',icons:['Visa','MC'],desc:'Visa, Mastercard',icon:'💳'},
   {id:'cod',label:'Bayar di Tempat',icons:['COD'],desc:'Jakarta only',icon:'💵'},
 ]
-const PROVINCES = ['DKI Jakarta','Jawa Barat','Jawa Tengah','Jawa Timur','Banten','Bali','Sumatera Utara','Sulawesi Selatan','Kalimantan Timur']
+const PROVINCES = [
+  'Aceh','Sumatera Utara','Sumatera Barat','Riau','Kepulauan Riau',
+  'Jambi','Sumatera Selatan','Kepulauan Bangka Belitung','Bengkulu','Lampung',
+  'DKI Jakarta','Jawa Barat','Banten','Jawa Tengah','DI Yogyakarta','Jawa Timur',
+  'Bali','Nusa Tenggara Barat','Nusa Tenggara Timur',
+  'Kalimantan Barat','Kalimantan Tengah','Kalimantan Selatan','Kalimantan Timur','Kalimantan Utara',
+  'Sulawesi Utara','Gorontalo','Sulawesi Tengah','Sulawesi Barat','Sulawesi Selatan','Sulawesi Tenggara',
+  'Maluku','Maluku Utara',
+  'Papua','Papua Barat','Papua Selatan','Papua Tengah','Papua Pegunungan','Papua Barat Daya'
+]
 const INTEGRATIONS_DATA = [
   {id:'midtrans', name:'Midtrans',         category:'Payment Gateway', logo:'💳', color:C.blue,   colorBg:C.blueBg,  tagline:'QRIS + Virtual Account + Kartu Kredit', fee:'0.7–2% per transaksi', channels:['QRIS','BCA VA','BNI VA','Mandiri VA','GoPay','ShopeePay'], docs:'https://docs.midtrans.com', signup:'https://dashboard.midtrans.com/register', steps:['Daftar di midtrans.com — sandbox langsung aktif tanpa dokumen','Settings → Access Keys → Copy Server Key & Client Key','Isi credentials di bawah → Save → Test Connection','Settings → Payment Notification → isi URL webhook','Copy kode API route ke project Next.js'], creds:[{key:'MIDTRANS_SERVER_KEY',label:'Server Key',type:'password',placeholder:'SB-Mid-server-xxxx',hint:'Settings → Access Keys'},{key:'MIDTRANS_CLIENT_KEY',label:'Client Key',type:'text',placeholder:'SB-Mid-client-xxxx',hint:'Untuk Snap popup di frontend'},{key:'MIDTRANS_ENVIRONMENT',label:'Environment',type:'select',options:['sandbox','production'],hint:'Gunakan sandbox untuk testing dulu'}], env:['MIDTRANS_SERVER_KEY=SB-Mid-server-xxxx','MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxx','NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxx','MIDTRANS_ENVIRONMENT=sandbox']},
   {id:'rajaongkir',name:'RajaOngkir',      category:'Shipping',        logo:'📦', color:C.g600,   colorBg:C.g50,     tagline:'JNE, J&T, SiCepat & 20+ kurir Indonesia', fee:'Gratis 5.000 req/hari', channels:['JNE','J&T Express','SiCepat','AnterAja','Pos Indonesia'], docs:'https://rajaongkir.com/dokumentasi', signup:'https://rajaongkir.com/daftar', steps:['Daftar di rajaongkir.com — Starter tier gratis langsung aktif','Dashboard → API Key → Copy key kamu','Isi API Key di bawah → Save → Test','Pastikan setiap produk ada data berat (gram)','Copy kode API route ke /api/shipping/'], creds:[{key:'RAJAONGKIR_API_KEY',label:'API Key',type:'password',placeholder:'xxxxxxxxxxxxxxxx',hint:'Dashboard RajaOngkir → API Key'},{key:'RAJAONGKIR_TIER',label:'Tier',type:'select',options:['starter','basic','pro'],hint:'Starter gratis, Basic/Pro untuk lebih banyak kurir'}], env:['RAJAONGKIR_API_KEY=xxxxxxxxxxxxxxxx','RAJAONGKIR_TIER=starter']},
