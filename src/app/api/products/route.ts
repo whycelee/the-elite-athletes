@@ -4,23 +4,25 @@ import { supabaseAdmin } from '@/lib/supabase'
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
-    const sport   = searchParams.get('sport')
-    const gender  = searchParams.get('gender')
-    const inStock = searchParams.get('inStock') === 'true'
+    const sport  = searchParams.get('sport')
+    const gender = searchParams.get('gender')
 
     let query = supabaseAdmin
       .from('products')
       .select('*, stock(*)')
       .order('created_at', { ascending: false })
 
-    if (sport)  query = query.eq('sport', sport)
     if (gender) query = query.eq('gender', gender)
 
     const { data, error } = await query
     if (error) throw error
 
-    const result = inStock
-      ? data.filter(p => (p.stock as any[]).some((s: any) => s.quantity > 0))
+    // Filter sport — check both main sport and tags array
+    const result = sport
+      ? data.filter(p =>
+          p.sport === sport ||
+          (Array.isArray(p.tags) && p.tags.includes(sport))
+        )
       : data
 
     return NextResponse.json({ data: result })
@@ -32,12 +34,14 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { name, sku, sport, gender, price, hpp, emoji, desc, sizes, colors } = body
+    const { name, sku, sport, gender, price, hpp, emoji, desc, sizes, colors, tags } = body
 
-    // Generate ID dari SKU
+    if (!name || !sku || !price) {
+      return NextResponse.json({ error: 'name, sku, price wajib diisi' }, { status: 400 })
+    }
+
     const id = sku.toUpperCase().replace(/[^A-Z0-9-]/g, '')
 
-    // Insert produk
     const { data: product, error: prodErr } = await supabaseAdmin
       .from('products')
       .insert({
@@ -52,6 +56,7 @@ export async function POST(req: Request) {
         description: desc || '',
         sizes:       sizes || ['S','M','L','XL'],
         colors:      colors || ['Black'],
+        tags:        tags || [],   // multi-sport tags
         status:      'active',
         rating:      5.0,
         review_count: 0,

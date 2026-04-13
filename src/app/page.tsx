@@ -22,7 +22,7 @@ const C = {
 // SEED DATA
 // ═══════════════════════════════════════════════════════════
 const ALL_PRODUCTS = [
-  { id:'TEA-001', sku:'TEA-TEN-001', sport:'Tennis',  gender:'Men',    name:'Court Precision Polo',  price:649000, hpp:280000, original:890000,  rating:4.9, reviews:214, badge:'Best Seller', emoji:'🎾', tags:['Moisture-Wicking','UV Protection'], desc:'Engineered for match-day performance with advanced moisture-wicking technology.', sizes:['S','M','L','XL','XXL'], colors:['Forest','White','Navy'],    stock:{S:12,M:24,L:18,XL:8,XXL:3},  status:'active',   reorder:5 },
+  { id:'TEA-001', sku:'TEA-TEN-001', sport:'Tennis',  gender:'Men',    name:'Court Precision Polo',  price:649000, hpp:280000, original:890000,  rating:4.9, reviews:214, badge:'Best Seller', emoji:'🎾', tags:['Moisture-Wicking','UV Protection'], sports:['Tennis','Padel'], desc:'Engineered for match-day performance with advanced moisture-wicking technology.', sizes:['S','M','L','XL','XXL'], colors:['Forest','White','Navy'],    stock:{S:12,M:24,L:18,XL:8,XXL:3},  status:'active',   reorder:5 },
   { id:'TEA-002', sku:'TEA-RUN-002', sport:'Running', gender:'Women',  name:'AeroStride Tights',     price:549000, hpp:230000, original:null,    rating:4.8, reviews:178, badge:'New',         emoji:'🏃', tags:['4-Way Stretch','Reflective'],    desc:'Unrestricted movement for every stride. High-waist with hidden pocket.',        sizes:['XS','S','M','L','XL'],   colors:['Black','Forest','Charcoal'],stock:{XS:5,S:14,M:20,L:11,XL:4},   status:'active',   reorder:5 },
   { id:'TEA-003', sku:'TEA-HYR-003', sport:'Hyrox',   gender:'Men',    name:'Elite Training Tee',    price:389000, hpp:150000, original:520000,  rating:4.7, reviews:132, badge:'Sale',        emoji:'🏋️', tags:['Anti-Odor','Seamless'],          desc:'Built for the toughest workouts. Seamless construction eliminates chafing.',    sizes:['S','M','L','XL','XXL'], colors:['Black','Olive','White'],    stock:{S:2,M:5,L:3,XL:1,XXL:0},  status:'low',      reorder:8 },
   { id:'TEA-004', sku:'TEA-GOL-004', sport:'Golf',    gender:'Men',    name:'Course Ready Shorts',   price:729000, hpp:310000, original:null,    rating:5.0, reviews:89,  badge:'Limited',     emoji:'⛳', tags:['Quick-Dry','Stretch Waist'],     desc:'Refined comfort from tee to green.',                                            sizes:['S','M','L','XL'],       colors:['Khaki','Navy','Forest'], stock:{S:9,M:15,L:10,XL:6},      status:'active',   reorder:4 },
@@ -373,7 +373,7 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
   const tog=(arr:string[],set:(a:string[])=>void,v:string)=>set(arr.includes(v)?arr.filter(x=>x!==v):[...arr,v])
   const filtered=useMemo(()=>{
     let p=[...ALL_PRODUCTS]
-    if(sports.length) p=p.filter(x=>sports.includes(x.sport))
+    if(sports.length) p=p.filter(x=>sports.includes(x.sport)||(x.sports&&x.sports.some((s:string)=>sports.includes(s))))
     if(genders.length) p=p.filter(x=>genders.includes(x.gender))
     if(priceR.length) p=p.filter(x=>priceR.some(r=>{const rng=PRICE_RANGES.find(pr=>pr.label===r);return rng&&x.price>=rng.min&&x.price<rng.max}))
     if(inStock) p=p.filter(x=>totStock(x)>0)
@@ -1095,7 +1095,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
   useEffect(()=>{
     fetch('/api/products').then(r=>r.json()).then(d=>{
       if(d.data&&d.data.length>0){
-        const norm=d.data.map((p:any)=>({...p,original:p.original_price,reviews:p.review_count,stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))}))
+        const norm=d.data.map((p:any)=>({...p,original:p.original_price,reviews:p.review_count,sports:p.tags||[],stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))}))
         setProducts(norm)
       }
     }).catch(()=>{})
@@ -1105,7 +1105,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
   const [statusF,setStatusF]=useState('all')
   const [editProd,setEditProd]=useState<any>(null)
   const [showAdd,setShowAdd]=useState(false)
-  const [newProd,setNewProd]=useState({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',emoji:'👕',sizes:'S,M,L,XL',colors:'Black,White',desc:'',hasSizes:true,hasColors:true})
+  const [newProd,setNewProd]=useState({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',emoji:'👕',sizes:'S,M,L,XL',colors:'Black,White',desc:'',extraSports:'',hasSizes:true,hasColors:true})
   const sports=['all',...new Set(products.map((p:any)=>p.sport))]
   const filtered=useMemo(()=>{
     let p=products
@@ -1164,7 +1164,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
         const d=await res.json()
         if(d.data) setProducts((p:any[])=>[...p,{...d.data,stock:{},status:'active'}])
         setShowAdd(false)
-        setNewProd({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',emoji:'👕',sizes:'S,M,L,XL',colors:'Black,White',desc:'',hasSizes:true,hasColors:true})
+        setNewProd({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',emoji:'👕',sizes:'S,M,L,XL',colors:'Black,White',desc:'',extraSports:'',hasSizes:true,hasColors:true})
         alert('Produk berhasil ditambahkan!')
       } else { alert('Gagal tambah produk') }
     }catch(e){alert('Error: '+e)}
@@ -1183,6 +1183,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
             {label:'HPP / Modal',key:'hpp',placeholder:'280000',type:'number'},
             {label:'Emoji',key:'emoji',placeholder:'👕'},
             {label:'Deskripsi',key:'desc',placeholder:'Deskripsi singkat produk...'},
+            {label:'Sport Tambahan (opsional, pisahkan koma)',key:'extraSports',placeholder:'Gym, Running'},
           ].map(f=>(
             <div key={f.key} style={{display:'flex',flexDirection:'column',gap:4}}>
               <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>{f.label}</label>
