@@ -156,8 +156,11 @@ function MiniCard({p,onView,onAdd}:{p:any,onView:()=>void,onAdd:()=>void}) {
   const disc=p.original?Math.round((1-p.price/p.original)*100):null
   return <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
     style={{background:C.white,border:`1px solid ${hov?C.g300:C.ink6}`,borderRadius:16,overflow:'hidden',transform:hov?'translateY(-4px)':'none',boxShadow:hov?'0 12px 36px rgba(42,80,50,0.10)':'none',transition:'all 0.25s',display:'flex',flexDirection:'column',cursor:'pointer'}}>
-    <div onClick={onView} style={{height:200,background:C.cream,display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
-      <span style={{fontSize:72}}>{p.emoji}</span>
+    <div onClick={onView} style={{height:200,background:C.cream,display:'flex',alignItems:'center',justifyContent:'center',position:'relative',overflow:'hidden'}}>
+      {p.image_url
+        ?<img src={p.image_url} alt={p.name} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}/>
+        :<span style={{fontSize:72,position:'relative',zIndex:1}}>{p.emoji}</span>
+      }
       <div style={{position:'absolute',top:12,left:12}}><PBadge label={p.badge}/></div>
       {disc&&<div style={{position:'absolute',top:12,right:12,background:C.white,color:'#C0392B',fontSize:10,fontWeight:800,padding:'4px 8px',borderRadius:5,border:'1px solid #F5C6C2'}}>−{disc}%</div>}
     </div>
@@ -1095,7 +1098,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
   useEffect(()=>{
     fetch('/api/products').then(r=>r.json()).then(d=>{
       if(d.data&&d.data.length>0){
-        const norm=d.data.map((p:any)=>({...p,original:p.original_price,reviews:p.review_count,sports:p.tags||[],stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))}))
+        const norm=d.data.map((p:any)=>({...p,original:p.original_price,reviews:p.review_count,sports:p.tags||[],image_url:p.image_url||null,stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))}))
         setProducts(norm)
       }
     }).catch(()=>{})
@@ -1106,6 +1109,10 @@ function AdminInventory({products:initP}:{products:any[]}) {
   const [editProd,setEditProd]=useState<any>(null)
   const [showAdd,setShowAdd]=useState(false)
   const [newProd,setNewProd]=useState({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',emoji:'👕',sizes:'S,M,L,XL',colors:'Black,White',desc:'',extraSports:'',hasSizes:true,hasColors:true})
+  const [imageFile,setImageFile]=useState<File|null>(null)
+  const [imagePreview,setImagePreview]=useState<string|null>(null)
+  const [uploadingImg,setUploadingImg]=useState(false)
+  const [previewImg,setPreviewImg]=useState<string|null>(null)
   const sports=['all',...new Set(products.map((p:any)=>p.sport))]
   const filtered=useMemo(()=>{
     let p=products
@@ -1149,6 +1156,23 @@ function AdminInventory({products:initP}:{products:any[]}) {
     </div>
   }
   const sums=[{l:'Total SKUs',v:products.length,col:C.ink},{l:'Active',v:products.filter((p:any)=>p.status==='active').length,col:C.g600},{l:'Low/Critical',v:products.filter((p:any)=>['low','critical'].includes(p.status)).length,col:C.amber},{l:'Out of Stock',v:products.filter((p:any)=>p.status==='out').length,col:C.red},{l:'Total Units',v:products.reduce((s:number,p:any)=>s+totStock(p),0),col:C.blue}]
+  async function uploadImage(file:File, sku:string):Promise<string|null>{
+    try{
+      const ext = file.name.split('.').pop()
+      const fileName = `${sku.toLowerCase().replace(/[^a-z0-9]/g,'-')}-${Date.now()}.${ext}`
+      const { data, error } = await (await import('@supabase/supabase-js')).createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      ).storage.from('product-images').upload(fileName, file, {upsert:true})
+      if(error) throw error
+      const { data: urlData } = (await import('@supabase/supabase-js')).createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      ).storage.from('product-images').getPublicUrl(fileName)
+      return urlData.publicUrl
+    }catch(e){console.error('Upload error:',e);return null}
+  }
+
   async function handleAddProduct(){
     if(!newProd.name||!newProd.sku||!newProd.price){alert('Isi nama, SKU, dan harga dulu.');return}
     try{
@@ -1165,6 +1189,9 @@ function AdminInventory({products:initP}:{products:any[]}) {
         if(d.data) setProducts((p:any[])=>[...p,{...d.data,stock:{},status:'active'}])
         setShowAdd(false)
         setNewProd({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',emoji:'👕',sizes:'S,M,L,XL',colors:'Black,White',desc:'',extraSports:'',hasSizes:true,hasColors:true})
+        setImageFile(null)
+        setImagePreview(null)
+        setPreviewImg(null)
         alert('Produk berhasil ditambahkan!')
       } else { alert('Gagal tambah produk') }
     }catch(e){alert('Error: '+e)}
@@ -1190,6 +1217,60 @@ function AdminInventory({products:initP}:{products:any[]}) {
               <input type={f.type||'text'} value={(newProd as any)[f.key]} placeholder={f.placeholder} onChange={e=>setNewProd(p=>({...p,[f.key]:e.target.value}))} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
             </div>
           ))}
+          {/* IMAGE UPLOAD */}
+          <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+            <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:8}}>Foto Produk</label>
+            <div style={{display:'flex',gap:12,alignItems:'center'}}>
+              <div style={{width:80,height:80,background:C.white,borderRadius:10,border:`2px dashed ${C.ink5}`,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
+                {previewImg
+                  ?<img src={previewImg} alt="preview" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                  :<span style={{fontSize:28}}>{newProd.emoji||'📷'}</span>
+                }
+              </div>
+              <div style={{flex:1}}>
+                <label style={{display:'block',padding:'8px 14px',background:uploadingImg?C.ink5:C.g800,color:'#fff',borderRadius:8,fontSize:12,fontWeight:700,cursor:uploadingImg?'not-allowed':'pointer',textAlign:'center',marginBottom:6}}>
+                  {uploadingImg?'Mengupload...':'📷 Upload Foto'}
+                  <input type="file" accept="image/*" disabled={uploadingImg} onChange={async e=>{
+                    const file=e.target.files?.[0]
+                    if(!file)return
+                    const preview=URL.createObjectURL(file)
+                    setPreviewImg(preview)
+                    const url=await uploadImage(file, newProd.sku||'product')
+                    if(url)setPreviewImg(url)
+                  }} style={{display:'none'}}/>
+                </label>
+                <p style={{margin:0,fontSize:10,color:C.ink4}}>JPG, PNG, WebP. Maks 5MB.<br/>Disarankan 800×800px.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* IMAGE UPLOAD */}
+          <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+            <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:8}}>Foto Produk</label>
+            <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
+              {imagePreview
+                ?<div style={{position:'relative',flexShrink:0}}>
+                  <img src={imagePreview} alt="preview" style={{width:80,height:80,objectFit:'cover',borderRadius:8,border:`1px solid ${C.ink5}`}}/>
+                  <button onClick={()=>{setImageFile(null);setImagePreview(null)}} style={{position:'absolute',top:-6,right:-6,width:18,height:18,borderRadius:'50%',background:C.red,color:'#fff',border:'none',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+                </div>
+                :<div style={{width:80,height:80,background:C.white,border:`2px dashed ${C.ink5}`,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:24}}>📷</div>
+              }
+              <div style={{flex:1}}>
+                <input type="file" accept="image/*" id="img-upload" style={{display:'none'}} onChange={e=>{
+                  const file=e.target.files?.[0]
+                  if(file){
+                    setImageFile(file)
+                    const reader=new FileReader()
+                    reader.onload=ev=>setImagePreview(ev.target?.result as string)
+                    reader.readAsDataURL(file)
+                  }
+                }}/>
+                <label htmlFor="img-upload" style={{display:'block',padding:'8px 14px',background:C.g800,color:'#fff',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',textAlign:'center',marginBottom:6}}>Pilih Foto</label>
+                <p style={{margin:0,fontSize:10,color:C.ink4}}>JPG, PNG, WEBP. Maks 5MB.</p>
+              </div>
+            </div>
+          </div>
+
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
             <div style={{display:'flex',flexDirection:'column',gap:4}}>
               <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Sport</label>
