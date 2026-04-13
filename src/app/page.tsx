@@ -489,6 +489,7 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
 function DetailPage({product:p,nav,addToCart,cartCount}:{product:any,nav:(pg:string,d?:any)=>void,addToCart:(item:any)=>void,cartCount:number}) {
   const [selSize,setSelSize]=useState<string|null>(null)
   const [showSizeGuide,setShowSizeGuide]=useState(false)
+  const [activeImg,setActiveImg]=useState<string|null>(null)
   const [selColor,setSelColor]=useState(p.colors[0])
   const [qty,setQty]=useState(1)
   const [tab,setTab]=useState('description')
@@ -1093,39 +1094,151 @@ function AdminOrders({orders:initO}:{orders:any[]}) {
   </div>
 }
 
-function StockModal({product:p,onSave,onClose}:{product:any,onSave:(id:string,s:any)=>void,onClose:()=>void}){
-  const [stock,setStock]=useState<Record<string,number>>({...p.stock})
-  const total=Object.values(stock).reduce((s:number,n:number)=>s+n,0)
-  return <div style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-    <div style={{background:C.white,borderRadius:16,width:'min(440px,95vw)',padding:'22px 24px',display:'flex',flexDirection:'column',gap:16}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
-        <div><h3 style={{margin:'0 0 3px',fontSize:15,fontWeight:700,color:C.ink}}>{p.emoji} {p.name}</h3><p style={{margin:0,fontSize:11,color:C.ink4}}>{p.sku}</p></div>
-        <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:17,color:C.ink3,padding:'2px 5px'}}>✕</button>
+function EditProductModal({product:ep,onSave,onClose,uploadImageFn}:{product:any,onSave:(id:string,data:any)=>void,onClose:()=>void,uploadImageFn:(f:File,sku:string)=>Promise<string|null>}){
+  const sizesFromStock=Object.keys(ep.stock||{})
+  const [form,setForm]=useState({
+    name:ep.name||'',price:String(ep.price||''),original:String(ep.original||ep.original_price||''),
+    hpp:String(ep.hpp||''),desc:ep.description||ep.desc||'',sport:ep.sport||'Tennis',
+    gender:ep.gender||'Men',extraSports:(ep.tags||[]).join(', '),
+    sizes:sizesFromStock.length>0?sizesFromStock.join(','):(ep.sizes||[]).join(','),
+    colors:(ep.colors||[]).join(','),hasSizes:true,hasColors:true,
+  })
+  const [stock,setStock]=useState<Record<string,number>>({...ep.stock})
+  const [imgs,setImgs]=useState<(string|null)[]>([ep.image_url||null,null,null,null,null,null])
+  const [saving,setSaving]=useState(false)
+  const stockTotal=Object.values(stock).reduce((s:number,n:number)=>s+n,0)
+
+  async function handleImgUpload(idx:number,file:File){
+    const url=await uploadImageFn(file,ep.sku+'-img'+idx)
+    if(url)setImgs(arr=>{const a=[...arr];a[idx]=url;return a})
+  }
+
+  async function handleSave(){
+    setSaving(true)
+    const payload={
+      name:form.name,price:parseInt(form.price),
+      original:form.original?parseInt(form.original):null,
+      hpp:parseInt(form.hpp)||0,description:form.desc,
+      sport:form.sport,gender:form.gender,
+      tags:form.extraSports?form.extraSports.split(',').map((s:string)=>s.trim()).filter(Boolean):[],
+      sizes:form.sizes.split(',').map((s:string)=>s.trim()).filter(Boolean),
+      colors:form.colors.split(',').map((s:string)=>s.trim()).filter(Boolean),
+      image_url:imgs[0]||ep.image_url,
+      gallery:imgs.filter(Boolean),
+      stock,
+    }
+    await fetch(`/api/products/${ep.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    onSave(ep.id,{...ep,...payload,stock})
+    setSaving(false)
+    onClose()
+  }
+
+  const ImgSlot=({idx,label}:{idx:number,label:string})=>(
+    <div style={{display:'flex',flexDirection:'column',gap:5,alignItems:'center'}}>
+      <div style={{width:idx===0?100:72,height:idx===0?100:72,borderRadius:10,overflow:'hidden',border:`2px ${imgs[idx]?'solid '+C.g300:'dashed '+C.ink5}`,background:C.cream,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,position:'relative'}}>
+        {imgs[idx]?<img src={imgs[idx]!} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:idx===0?28:20}}>📷</span>}
+        {imgs[idx]&&<button onClick={()=>setImgs(a=>{const b=[...a];b[idx]=null;return b})} style={{position:'absolute',top:2,right:2,width:16,height:16,borderRadius:'50%',background:C.red,color:'#fff',border:'none',cursor:'pointer',fontSize:9,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>}
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(90px,1fr))',gap:10}}>
-        {Object.entries(stock).map(([sz,qty])=>(
-          <div key={sz} style={{textAlign:'center'}}>
-            <label style={{display:'block',fontSize:10,fontWeight:700,color:C.ink3,marginBottom:5,letterSpacing:'0.06em',textTransform:'uppercase'}}>Size {sz}</label>
-            <div style={{display:'flex',alignItems:'center',border:`1.5px solid ${C.ink5}`,borderRadius:8,overflow:'hidden',background:C.cream}}>
-              <button onClick={()=>setStock(s=>({...s,[sz]:Math.max(0,(s[sz]||0)-1)}))} style={{width:28,background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'6px 0',color:C.ink2,lineHeight:1}}>−</button>
-              <input
-                type="number" min={0} value={qty}
-                onChange={e=>setStock(s=>({...s,[sz]:Math.max(0,parseInt(e.target.value)||0)}))}
-                onFocus={e=>e.target.select()}
-                style={{flex:1,width:0,textAlign:'center',border:'none',background:'transparent',fontSize:13,fontWeight:700,color:C.ink,fontFamily:'inherit',outline:'none',padding:'6px 0'}}
-              />
-              <button onClick={()=>setStock(s=>({...s,[sz]:(s[sz]||0)+1}))} style={{width:28,background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'6px 0',color:C.ink2,lineHeight:1}}>+</button>
+      <label style={{fontSize:10,color:C.g700,fontWeight:600,cursor:'pointer',textAlign:'center'}}>
+        {label}
+        <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)handleImgUpload(idx,f)}}/>
+      </label>
+    </div>
+  )
+
+  return <div style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',padding:12}}>
+    <div style={{background:C.white,borderRadius:16,width:'min(560px,98vw)',maxHeight:'92vh',overflowY:'auto',padding:'20px 22px',display:'flex',flexDirection:'column',gap:13}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <h3 style={{margin:0,fontSize:16,fontWeight:700,color:C.ink}}>Edit Produk</h3>
+        <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:18,color:C.ink3}}>✕</button>
+      </div>
+
+      {/* FOTO — 1 utama + 5 detail */}
+      <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+        <p style={{margin:'0 0 10px',fontSize:12,fontWeight:700,color:C.ink3}}>Foto Produk</p>
+        <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
+          <ImgSlot idx={0} label="📌 Utama"/>
+          {[1,2,3,4,5].map(i=><ImgSlot key={i} idx={i} label={`Detail ${i}`}/>)}
+        </div>
+        <p style={{margin:'7px 0 0',fontSize:10,color:C.ink4}}>Foto Utama tampil di catalog. Detail tampil sebagai carousel di halaman produk.</p>
+      </div>
+
+      {/* BASIC FIELDS */}
+      {[
+        {label:'Nama Produk *',key:'name',placeholder:'Court Precision Polo'},
+        {label:'Harga Jual *',key:'price',placeholder:'649000',type:'number'},
+        {label:'Harga Asli / Sebelum Diskon',key:'original',placeholder:'890000',type:'number'},
+        {label:'HPP / Modal',key:'hpp',placeholder:'280000',type:'number'},
+        {label:'Deskripsi',key:'desc',placeholder:'Deskripsi singkat produk...'},
+        {label:'Sport Tambahan (pisahkan koma)',key:'extraSports',placeholder:'Gym, Running'},
+      ].map(f=>(
+        <div key={f.key} style={{display:'flex',flexDirection:'column',gap:4}}>
+          <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>{f.label}</label>
+          <input type={f.type||'text'} value={(form as any)[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+        </div>
+      ))}
+
+      {/* DISCOUNT PREVIEW */}
+      {form.price&&form.original&&parseInt(form.original)>parseInt(form.price)&&(
+        <div style={{background:C.g50,border:`1px solid ${C.g200}`,borderRadius:9,padding:'10px 14px',display:'flex',alignItems:'center',gap:10}}>
+          <span style={{fontSize:13,fontWeight:700,color:C.g700}}>{fmt(parseInt(form.price))}</span>
+          <span style={{fontSize:12,color:C.ink4,textDecoration:'line-through'}}>{fmt(parseInt(form.original))}</span>
+          <span style={{fontSize:11,fontWeight:700,background:C.red,color:'#fff',padding:'2px 7px',borderRadius:5}}>-{Math.round((1-parseInt(form.price)/parseInt(form.original))*100)}% OFF</span>
+        </div>
+      )}
+
+      {/* SPORT & GENDER */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
+        <div style={{display:'flex',flexDirection:'column',gap:4}}>
+          <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Sport</label>
+          <select value={form.sport} onChange={e=>setForm(p=>({...p,sport:e.target.value}))} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}>
+            {['Tennis','Badminton','Padel','Hyrox','Gym','Running','Golf','Pilates','Yoga','Footwear','Aksesoris','Lainnya'].map(s=><option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:4}}>
+          <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Gender</label>
+          <select value={form.gender} onChange={e=>setForm(p=>({...p,gender:e.target.value}))} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}>
+            {['Men','Women','Unisex'].map(s=><option key={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* UKURAN & WARNA */}
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Ukuran (pisahkan koma)</label>
+        <input value={form.sizes} onChange={e=>setForm(p=>({...p,sizes:e.target.value}))} placeholder="S,M,L,XL" style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Warna (pisahkan koma)</label>
+        <input value={form.colors} onChange={e=>setForm(p=>({...p,colors:e.target.value}))} placeholder="Black,White,Forest" style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+      </div>
+
+      {/* STOK */}
+      <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+        <p style={{margin:'0 0 10px',fontSize:12,fontWeight:700,color:C.ink3}}>Stok per Ukuran</p>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(90px,1fr))',gap:9}}>
+          {Object.entries(stock).map(([sz,qty])=>(
+            <div key={sz} style={{textAlign:'center'}}>
+              <label style={{display:'block',fontSize:10,fontWeight:700,color:C.ink4,marginBottom:4,textTransform:'uppercase'}}>{sz}</label>
+              <div style={{display:'flex',alignItems:'center',border:`1.5px solid ${C.ink5}`,borderRadius:8,overflow:'hidden',background:C.white}}>
+                <button onClick={()=>setStock(s=>({...s,[sz]:Math.max(0,(s[sz]||0)-1)}))} style={{width:26,background:'none',border:'none',cursor:'pointer',fontSize:15,color:C.ink2}}>−</button>
+                <input type="number" min={0} value={qty} onFocus={e=>e.target.select()} onChange={e=>setStock(s=>({...s,[sz]:Math.max(0,parseInt(e.target.value)||0)}))} style={{flex:1,width:0,textAlign:'center',border:'none',background:'transparent',fontSize:13,fontWeight:700,color:C.ink,fontFamily:'inherit',outline:'none',padding:'6px 0'}}/>
+                <button onClick={()=>setStock(s=>({...s,[sz]:(s[sz]||0)+1}))} style={{width:26,background:'none',border:'none',cursor:'pointer',fontSize:15,color:C.ink2}}>+</button>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+        <div style={{marginTop:9,padding:'8px 10px',background:C.g50,borderRadius:7,display:'flex',justifyContent:'space-between'}}>
+          <span style={{fontSize:12,color:C.ink3}}>Total stok</span>
+          <span style={{fontSize:13,fontWeight:800,color:C.g700}}>{stockTotal} unit</span>
+        </div>
       </div>
-      <div style={{background:C.g50,borderRadius:9,padding:'10px 14px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <span style={{fontSize:13,color:C.ink3}}>Total setelah edit</span>
-        <span style={{fontSize:15,fontWeight:800,color:C.g700}}>{total} unit</span>
-      </div>
-      <div style={{display:'flex',gap:9,justifyContent:'flex-end'}}>
-        <button onClick={onClose} style={{padding:'9px 18px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
-        <button onClick={()=>onSave(p.id,stock)} style={{padding:'9px 22px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>Simpan</button>
+
+      <div style={{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:4,borderTop:`1px solid ${C.ink6}`}}>
+        <button onClick={onClose} style={{padding:'10px 18px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
+        <button onClick={handleSave} disabled={saving} style={{padding:'10px 22px',background:saving?C.ink5:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:saving?'not-allowed':'pointer'}}>
+          {saving?'Menyimpan...':'Simpan Perubahan'}
+        </button>
       </div>
     </div>
   </div>
@@ -1159,12 +1272,12 @@ function AdminInventory({products:initP}:{products:any[]}) {
     if(statusF!=='all') p=p.filter((x:any)=>x.status===statusF)
     return p
   },[products,search,sportF,statusF])
-  function saveStock(id:string,newStock:any){
+  function saveProduct(id:string,updated:any){
     setProducts((ps:any[])=>ps.map((p:any)=>{
       if(p.id!==id)return p
-      const tot=Object.values(newStock as Record<string,number>).reduce((s,n)=>s+n,0)
-      const status=tot===0?'out':tot<=p.reorder?'critical':tot<=p.reorder*2?'low':'active'
-      return{...p,stock:newStock,status}
+      const tot=Object.values(updated.stock||p.stock as Record<string,number>).reduce((s:number,n:any)=>s+(n||0),0)
+      const status=tot===0?'out':tot<=(p.reorder||5)?'critical':tot<=(p.reorder||5)*2?'low':'active'
+      return{...p,...updated,stock:updated.stock||p.stock,status}
     }))
     setEditProd(null)
   }
@@ -1226,7 +1339,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
   }
 
   return <div style={{display:'flex',flexDirection:'column',gap:16}}>
-    {editProd&&<StockModal product={editProd} onSave={saveStock} onClose={()=>setEditProd(null)}/>}
+    {editProd&&<EditProductModal product={editProd} onSave={saveProduct} onClose={()=>setEditProd(null)} uploadImageFn={uploadImage}/>}
     {showAdd&&(
       <div style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,0.35)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
         <div style={{background:C.white,borderRadius:16,width:'min(520px,95vw)',maxHeight:'90vh',overflowY:'auto',padding:'22px 24px',display:'flex',flexDirection:'column',gap:14}}>
@@ -1237,7 +1350,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
             {label:'Harga Jual *',key:'price',placeholder:'649000',type:'number'},
             {label:'Harga Asli / Sebelum Diskon (opsional)',key:'original',placeholder:'890000',type:'number'},
             {label:'HPP / Modal',key:'hpp',placeholder:'280000',type:'number'},
-            {label:'Emoji',key:'emoji',placeholder:'👕'},
+
             {label:'Deskripsi',key:'desc',placeholder:'Deskripsi singkat produk...'},
             {label:'Sport Tambahan (opsional, pisahkan koma)',key:'extraSports',placeholder:'Gym, Running'},
           ].map(f=>(
@@ -1441,7 +1554,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
               </td>
               <td style={{padding:'10px 13px',fontWeight:800,fontSize:14,color:tot===0?C.red:tot<=5?C.amber:C.ink}}>{tot}</td>
               <td style={{padding:'10px 13px'}}><SBadge status={p.status}/></td>
-              <td style={{padding:'10px 13px'}}><button onClick={()=>setEditProd(p)} style={{padding:'4px 11px',background:C.g50,color:C.g700,border:`1px solid ${C.g200}`,borderRadius:7,fontSize:11,fontWeight:700,cursor:'pointer'}}>Edit Stok</button></td>
+              <td style={{padding:'10px 13px'}}><button onClick={()=>setEditProd(p)} style={{padding:'5px 12px',background:C.g800,color:'#fff',border:'none',borderRadius:7,fontSize:11,fontWeight:700,cursor:'pointer'}}>Edit Produk</button></td>
             </tr>
           })}
         </tbody>
