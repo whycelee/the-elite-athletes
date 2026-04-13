@@ -1178,23 +1178,29 @@ function AdminInventory({products:initP}:{products:any[]}) {
     try{
       const sizesArr=newProd.hasSizes?newProd.sizes.split(',').map((s:string)=>s.trim()).filter(Boolean):['One Size']
       const colorsArr=newProd.hasColors?newProd.colors.split(',').map((s:string)=>s.trim()).filter(Boolean):['Default']
+      const tagsArr=newProd.extraSports?newProd.extraSports.split(',').map((s:string)=>s.trim()).filter(Boolean):[]
+      // Upload image first if any
+      let imageUrl:string|null=null
+      if(imageFile) imageUrl=await uploadImage(imageFile, newProd.sku||'product')
       const res=await fetch('/api/products',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
         name:newProd.name,sku:newProd.sku,sport:newProd.sport,gender:newProd.gender,
         price:parseInt(newProd.price),hpp:parseInt(newProd.hpp)||0,
         emoji:newProd.emoji,desc:newProd.desc,
-        sizes:sizesArr,colors:colorsArr
+        sizes:sizesArr,colors:colorsArr,
+        tags:tagsArr,image_url:imageUrl
       })})
+      const d=await res.json()
       if(res.ok){
-        const d=await res.json()
-        if(d.data) setProducts((p:any[])=>[...p,{...d.data,stock:{},status:'active'}])
+        if(d.data) setProducts((p:any[])=>[...p,{...d.data,stock:{},status:'active',image_url:imageUrl}])
         setShowAdd(false)
         setNewProd({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',emoji:'👕',sizes:'S,M,L,XL',colors:'Black,White',desc:'',extraSports:'',hasSizes:true,hasColors:true})
         setImageFile(null)
         setImagePreview(null)
-        setPreviewImg(null)
         alert('Produk berhasil ditambahkan!')
-      } else { alert('Gagal tambah produk') }
-    }catch(e){alert('Error: '+e)}
+      } else {
+        alert('Gagal tambah produk: '+(d.error||'Unknown error'))
+      }
+    }catch(e:any){alert('Error: '+e.message)}
   }
 
   return <div style={{display:'flex',flexDirection:'column',gap:16}}>
