@@ -1321,7 +1321,7 @@ function EditProductModal({product:ep,onSave,onDelete,onClose,uploadImageFn}:{pr
               const newSizes=next.filter(Boolean)
               setForm(p=>({...p,sizes:newSizes.join(',')}))
               // sync stock - add new sizes with 0, keep existing
-              setStock(s=>{const ns={...s};newSizes.forEach(size=>{if(!(size in ns))ns[size]=0});return ns})
+              setStock(s=>{const ns={...s};newSizes.forEach((size:string)=>{if(!(size in ns))ns[size]=0});return ns})
             }} style={{padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:active?700:400,cursor:'pointer',background:active?C.g800:C.white,color:active?'#fff':C.ink2,border:`1px solid ${active?C.g800:C.ink5}`}}>{sz}</button>
           })}
         </div>
