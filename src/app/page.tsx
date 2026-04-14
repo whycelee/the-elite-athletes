@@ -406,12 +406,30 @@ function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
   const [showCart,setShowCart]=useState(false)
   const [cart,setCart]=useState<any[]>([])
   const [toast,setToast]=useState<string|null>(null)
+  const [dbProducts,setDbProducts]=useState<any[]>(ALL_PRODUCTS)
   useEffect(()=>{const fn=()=>setScrolled(window.scrollY>30);window.addEventListener('scroll',fn);return()=>window.removeEventListener('scroll',fn)},[])
   useEffect(()=>{
     const timer=setInterval(()=>setHeroSlide((s:number)=>(s+1)%5),5000)
     return()=>clearInterval(timer)
   },[])
-  function handleAdd(p:any){const item={...p,qty:1,size:p.sizes[0]};setCart(c=>[...c,item]);addToCart(item);setToast(p.name)}
+  useEffect(()=>{
+    fetch('/api/products').then(r=>r.json()).then(d=>{
+      if(d.data&&d.data.length>0){
+        const norm=d.data.map((p:any)=>({
+          ...p,
+          original:p.original_price||p.original||null,
+          reviews:p.review_count||0,
+          sports:p.tags||[],
+          image_url:p.image_url||null,
+          sizes:p.sizes||[],
+          colors:p.colors||[],
+          stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))
+        }))
+        setDbProducts(norm)
+      }
+    }).catch(()=>{})
+  },[])
+  function handleAdd(p:any){const item={...p,qty:1,size:(p.sizes||['M'])[0]};setCart(c=>[...c,item]);addToCart(item);setToast(p.name)}
   const cats=[{icon:'🎾',label:'Tennis',count:48},{icon:'🏸',label:'Badminton',count:22},{icon:'🏓',label:'Padel',count:36},{icon:'🏋️',label:'Hyrox',count:29},{icon:'💪',label:'Gym',count:112},{icon:'🏃',label:'Running',count:94},{icon:'⛳',label:'Golf',count:41},{icon:'🧘',label:'Pilates',count:33},{icon:'🪷',label:'Yoga',count:57},{icon:'👟',label:'Footwear',count:18},{icon:'🎒',label:'Aksesoris',count:24}]
   return <div style={{background:C.cream,minHeight:'100vh'}}>
     {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
@@ -447,7 +465,7 @@ function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
           <button onClick={()=>nav('catalog')} style={{fontSize:13,fontWeight:600,color:C.g600,background:'none',border:'none',cursor:'pointer'}}>View All →</button>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:14}}>
-          {[...ALL_PRODUCTS,...ALL_PRODUCTS,...ALL_PRODUCTS].slice(0,24).map((p,i)=><MiniCard key={p.id+'-'+i} p={p} onView={()=>nav('detail',p)} onAdd={()=>handleAdd(p)}/>)}
+          {dbProducts.slice(0,24).map((p:any,i:number)=><MiniCard key={p.id+'-'+i} p={p} onView={()=>nav('detail',p)} onAdd={()=>handleAdd(p)}/>)}
         </div>
         <div style={{textAlign:'center',marginTop:24}}>
           <button onClick={()=>nav('catalog')} style={{background:C.g800,color:'#fff',border:'none',borderRadius:10,padding:'12px 32px',fontSize:14,fontWeight:600,cursor:'pointer'}}>Lihat Semua Produk →</button>
@@ -472,10 +490,30 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
   const [sortBy,setSortBy]=useState('newest')
   const [view,setView]=useState('grid')
   const [toast,setToast]=useState<string|null>(null)
+  const [allProducts,setAllProducts]=useState<any[]>(ALL_PRODUCTS)
+  const [loading,setLoading]=useState(true)
+  useEffect(()=>{
+    fetch('/api/products').then(r=>r.json()).then(d=>{
+      if(d.data&&d.data.length>0){
+        const norm=d.data.map((p:any)=>({
+          ...p,
+          original:p.original_price||p.original||null,
+          reviews:p.review_count||0,
+          sports:p.tags||[],
+          image_url:p.image_url||null,
+          sizes:p.sizes||[],
+          colors:p.colors||[],
+          stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))
+        }))
+        setAllProducts(norm)
+      }
+      setLoading(false)
+    }).catch(()=>setLoading(false))
+  },[])
   const PRICE_RANGES=[{label:'< Rp 400K',min:0,max:400000},{label:'Rp 400K–600K',min:400000,max:600000},{label:'Rp 600K–800K',min:600000,max:800000},{label:'> Rp 800K',min:800000,max:Infinity}]
   const tog=(arr:string[],set:(a:string[])=>void,v:string)=>set(arr.includes(v)?arr.filter(x=>x!==v):[...arr,v])
   const filtered=useMemo(()=>{
-    let p=[...ALL_PRODUCTS]
+    let p=[...allProducts]
     if(sports.length) p=p.filter(x=>sports.includes(x.sport)||(x.sports&&x.sports.some((s:string)=>sports.includes(s))))
     if(genders.length) p=p.filter(x=>genders.includes(x.gender))
     if(priceR.length) p=p.filter(x=>priceR.some(r=>{const rng=PRICE_RANGES.find(pr=>pr.label===r);return rng&&x.price>=rng.min&&x.price<rng.max}))
@@ -485,7 +523,7 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
     else if(sortBy==='rating') p.sort((a,b)=>b.rating-a.rating)
     else if(sortBy==='bestseller') p.sort((a,b)=>b.reviews-a.reviews)
     return p
-  },[sports,genders,priceR,inStock,sortBy])
+  },[allProducts,sports,genders,priceR,inStock,sortBy])
   const activeCount=sports.length+genders.length+priceR.length+(inStock?1:0)
   const clearAll=()=>{setSports([]);setGenders([]);setPriceR([]);setInStock(false)}
   const Chk=({label,checked,onChange}:{label:string,checked:boolean,onChange:()=>void})=>(
@@ -517,7 +555,7 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
       <div style={{maxWidth:1280,margin:'0 auto',padding:'12px 4vw'}}>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
           <h1 style={{margin:0,fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.1rem,4vw,1.6rem)',fontWeight:400,color:C.ink,flexShrink:0}}>Katalog</h1>
-          <span style={{fontSize:11,color:C.ink4,flexShrink:0}}>({filtered.length})</span>
+          <span style={{fontSize:11,color:C.ink4,flexShrink:0}}>{loading?"...":`(${filtered.length})`}</span>
           <div style={{flex:1}}/>
           {/* SORT */}
           <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{padding:'7px 10px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',background:C.white,cursor:'pointer',color:C.ink,maxWidth:120}}>
@@ -596,7 +634,15 @@ function DetailPage({product:p,nav,addToCart,cartCount}:{product:any,nav:(pg:str
   const [added,setAdded]=useState(false)
   const [toast,setToast]=useState<string|null>(null)
   const disc=p.original?Math.round((1-p.price/p.original)*100):null
-  const related=ALL_PRODUCTS.filter((x:any)=>x.sport===p.sport&&x.id!==p.id).slice(0,4)
+  const [related,setRelated]=useState<any[]>([])
+  useEffect(()=>{
+    fetch('/api/products').then(r=>r.json()).then(d=>{
+      if(d.data){
+        const norm=d.data.map((x:any)=>({...x,original:x.original_price||null,reviews:x.review_count||0,sports:x.tags||[],image_url:x.image_url||null,sizes:x.sizes||[],colors:x.colors||[],stock:Object.fromEntries((x.stock||[]).map((s:any)=>[s.size,s.quantity]))}))
+        setRelated(norm.filter((x:any)=>x.sport===p.sport&&x.id!==p.id).slice(0,4))
+      }
+    }).catch(()=>{})
+  },[p.id])
   const SWATCH:Record<string,string>={Forest:'#2D5134',White:'#F8F8F6',Navy:'#1B2A4A',Black:'#1C1C1A',Charcoal:'#3A3A3A',Olive:'#5A6045',Sage:'#7A9E7E',Blush:'#E8B4B8',Khaki:'#C3B89A',Cream:'#FAF8F4',Sand:'#D4C4A0'}
   function handleAdd(){if(!selSize){alert('Pilih ukuran terlebih dahulu.');return}addToCart({...p,qty,size:selSize,color:selColor});setAdded(true);setToast(p.name);setTimeout(()=>setAdded(false),2000)}
   return <div style={{background:C.cream,minHeight:'100vh'}}>
