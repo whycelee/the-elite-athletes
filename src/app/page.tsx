@@ -235,7 +235,9 @@ function CartDrawer({cart,onClose,onRemove,onCheckout}:{cart:any[],onClose:()=>v
           <div style={{flex:1,overflowY:'auto',padding:'14px 22px',display:'flex',flexDirection:'column',gap:10}}>
             {cart.map((item:any,i:number)=>(
               <div key={i} style={{display:'flex',gap:12,background:C.cream,borderRadius:12,padding:12}}>
-                <div style={{width:52,height:52,background:C.white,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:26,flexShrink:0}}>{item.emoji}</div>
+                <div style={{width:52,height:52,background:C.cream,borderRadius:8,overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  {item.image_url?<img src={item.image_url} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:26}}>{item.emoji}</span>}
+                </div>
                 <div style={{flex:1}}><p style={{margin:'0 0 2px',fontSize:13,fontWeight:700,color:C.ink}}>{item.name}</p><p style={{margin:'0 0 3px',fontSize:11,color:C.ink4}}>{item.sport} · Size {item.size}</p><p style={{margin:0,fontSize:13,fontWeight:700,color:C.g700}}>{fmt(item.price)}</p></div>
                 <button onClick={()=>onRemove(i)} style={{background:'none',border:'none',cursor:'pointer',color:C.ink4,fontSize:16,padding:'2px',alignSelf:'flex-start'}}>✕</button>
               </div>
@@ -428,7 +430,7 @@ function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
       }
     }).catch(()=>{})
   },[])
-  function handleAdd(p:any){const item={...p,qty:1,size:(p.sizes||['M'])[0]};setCart(c=>[...c,item]);addToCart(item);setToast(p.name)}
+  function handleAdd(p:any){const item={...p,qty:1,size:(p.sizes&&p.sizes.length>0)?p.sizes[0]:'M',image_url:p.image_url||null};setCart(c=>[...c,item]);addToCart(item);setToast(p.name)}
   const cats=[{icon:'🎾',label:'Tennis',count:48},{icon:'🏸',label:'Badminton',count:22},{icon:'🏓',label:'Padel',count:36},{icon:'🏋️',label:'Hyrox',count:29},{icon:'💪',label:'Gym',count:112},{icon:'🏃',label:'Running',count:94},{icon:'⛳',label:'Golf',count:41},{icon:'🧘',label:'Pilates',count:33},{icon:'🪷',label:'Yoga',count:57},{icon:'👟',label:'Footwear',count:18},{icon:'🎒',label:'Aksesoris',count:24}]
   return <div style={{background:C.cream,minHeight:'100vh'}}>
     {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
@@ -523,7 +525,7 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
     return p
   },[allProducts,sports,genders,inStock,sortBy])
   const activeCount=sports.length+genders.length+(inStock?1:0)
-  const clearAll=()=>{setSports([]);setGenders([]);setPriceR([]);setInStock(false)}
+  const clearAll=()=>{setSports([]);setGenders([]);setInStock(false)}
   const Chk=({label,checked,onChange}:{label:string,checked:boolean,onChange:()=>void})=>(
     <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',marginBottom:9}}>
       <div onClick={onChange} style={{width:16,height:16,borderRadius:4,flexShrink:0,border:`1.5px solid ${checked?C.g600:C.ink5}`,background:checked?C.g700:'transparent',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',transition:'all 0.15s'}}>
@@ -591,7 +593,7 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
                 </label>
                 {activeCount>0&&<button onClick={()=>{clearAll();setShowFilters(false)}} style={{background:'none',border:'none',cursor:'pointer',fontSize:11,color:C.red,fontWeight:600}}>Reset semua</button>}
               </div>
-              <button onClick={()=>setShowFilters(false)} style={{width:'100%',marginTop:14,padding:'10px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>Lihat {filtered.length} Produk</button>
+              <button onClick={()=>setShowFilters(false)} style={{width:'100%',marginTop:14,padding:'10px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>Tampilkan {filtered.length} Produk</button>
             </div>}
           </div>
         </div>
@@ -605,7 +607,7 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
       {filtered.length===0
         ?<div style={{textAlign:'center',padding:'52px 0',color:C.ink4}}><div style={{fontSize:36,marginBottom:10}}>🔍</div><p style={{fontSize:14,fontWeight:600,color:C.ink2,margin:'0 0 14px'}}>Tidak ada produk</p><button onClick={clearAll} style={{background:C.g800,color:'#fff',border:'none',borderRadius:9,padding:'10px 22px',fontSize:13,fontWeight:600,cursor:'pointer'}}>Reset Filter</button></div>
         :<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:16}}>
-          {filtered.map(p=><MiniCard key={p.id} p={p} onView={()=>nav('detail',p)} onAdd={()=>{addToCart({...p,qty:1,size:p.sizes[0]});setToast(p.name)}}/>)}
+          {filtered.map(p=><MiniCard key={p.id} p={p} onView={()=>nav('detail',p)} onAdd={()=>{addToCart({...p,qty:1,size:(p.sizes&&p.sizes.length>0)?p.sizes[0]:'M',image_url:p.image_url||null});setToast(p.name)}}/>)}
         </div>
       }
     </div>
@@ -688,18 +690,31 @@ function DetailPage({product:p,nav,addToCart,cartCount}:{product:any,nav:(pg:str
     <div style={{maxWidth:1280,margin:'0 auto',padding:'20px 5vw 48px'}}>
       <div className="detail-grid" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:48,alignItems:'start',marginBottom:52}}>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
-          <div style={{background:C.white,borderRadius:20,border:`1px solid ${C.ink6}`,aspectRatio:'1/1',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',overflow:'hidden'}}>
-            <div style={{position:'absolute',bottom:0,right:0,width:'55%',height:'55%',background:C.g50,borderRadius:'50% 0 20px 0'}}/>
-            <span style={{fontSize:120,position:'relative',zIndex:1}}>{p.emoji}</span>
+          {/* MAIN IMAGE */}
+          <div onClick={()=>setActiveImg(null)} style={{background:C.white,borderRadius:20,border:`1.5px solid ${activeImg?C.ink6:C.g300}`,aspectRatio:'1/1',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',overflow:'hidden',cursor:'pointer'}}>
+            {activeImg
+              ?<img src={activeImg} alt={p.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+              :p.image_url
+                ?<img src={p.image_url} alt={p.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                :<><div style={{position:'absolute',bottom:0,right:0,width:'55%',height:'55%',background:C.g50,borderRadius:'50% 0 20px 0'}}/><span style={{fontSize:120,position:'relative',zIndex:1}}>{p.emoji}</span></>
+            }
             <div style={{position:'absolute',top:16,left:16}}><PBadge label={p.badge}/></div>
             {disc&&<span style={{position:'absolute',top:16,right:16,background:'#FEF2F2',color:'#C0392B',fontSize:10,fontWeight:800,padding:'4px 10px',borderRadius:4,border:'1px solid #FCA5A5'}}>−{disc}% OFF</span>}
           </div>
-          <div style={{display:'flex',gap:10}}>{[p.emoji,'📦','🏷️'].map((e,i)=><div key={i} style={{flex:1,aspectRatio:'1/1',background:i===0?C.white:C.cream2,borderRadius:10,border:`1.5px solid ${i===0?C.g400:C.ink6}`,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:24}}>{e}</div>)}</div>
+          {/* THUMBNAIL GALLERY */}
+          <div style={{display:'flex',gap:8}}>
+            {[p.image_url,...(p.gallery||[])].filter(Boolean).slice(0,5).map((img:string,i:number)=>(
+              <div key={i} onClick={()=>setActiveImg(i===0&&!activeImg?null:img)} style={{flex:1,aspectRatio:'1/1',borderRadius:9,overflow:'hidden',border:`1.5px solid ${(activeImg===img||(i===0&&!activeImg))?C.g400:C.ink6}`,cursor:'pointer',background:C.cream}}>
+                <img src={img} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+              </div>
+            ))}
+            {/* Show emoji placeholder if no images */}
+            {!p.image_url&&<div style={{flex:1,aspectRatio:'1/1',background:C.white,borderRadius:9,border:`1.5px solid ${C.g400}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24}}>{p.emoji}</div>}
+          </div>
         </div>
         <div style={{display:'flex',flexDirection:'column',gap:16}}>
           <div style={{display:'flex',gap:8,alignItems:'center'}}><span style={{fontSize:11,fontWeight:700,color:C.g500,letterSpacing:'0.12em',textTransform:'uppercase'}}>{p.sport}</span><span style={{color:C.ink5}}>·</span><span style={{fontSize:11,color:C.ink4,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.06em'}}>{p.gender}</span></div>
           <h1 style={{margin:0,fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.5rem,3.5vw,2.2rem)',fontWeight:400,color:C.ink,lineHeight:1.15,letterSpacing:'-0.02em'}}>{p.name}</h1>
-          <div style={{display:'flex',alignItems:'center',gap:10}}><Stars r={p.rating} size={14}/><span style={{fontSize:13,color:C.ink3}}>{p.reviews} reviews</span></div>
           <div style={{display:'flex',alignItems:'baseline',gap:10,padding:'14px 0',borderTop:`1px solid ${C.ink6}`,borderBottom:`1px solid ${C.ink6}`}}>
             <span style={{fontSize:28,fontWeight:800,color:C.ink,letterSpacing:'-0.03em'}}>{fmt(p.price)}</span>
             {p.original&&<><span style={{fontSize:15,color:C.ink4,textDecoration:'line-through'}}>{fmt(p.original)}</span><span style={{fontSize:12,fontWeight:700,color:'#C0392B',background:'#FEF2F2',padding:'3px 8px',borderRadius:5}}>Hemat {fmt(p.original-p.price)}</span></>}
@@ -722,11 +737,7 @@ function DetailPage({product:p,nav,addToCart,cartCount}:{product:any,nav:(pg:str
             <button onClick={handleAdd} style={{flex:1,padding:'0 18px',height:46,background:added?C.g600:C.g800,color:'#fff',border:'none',borderRadius:10,fontSize:14,fontWeight:700,cursor:'pointer',transition:'background 0.2s'}}>{added?'✓ Added!':'Add to Cart'}</button>
             <button style={{width:46,height:46,background:C.white,border:`1px solid ${C.ink5}`,borderRadius:10,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke={C.ink3} strokeWidth="1.5" strokeLinecap="round"><path d="M9 15.5S2 11 2 6a4 4 0 017-2.6A4 4 0 0116 6c0 5-7 9.5-7 9.5z"/></svg></button>
           </div>
-          <div style={{display:'flex',gap:12,padding:'12px 0',borderTop:`1px solid ${C.ink6}`,flexWrap:'wrap'}}>
-            {[['📦','Free Shipping','Di atas Rp 500K'],['↩️','30-Day Returns','Tanpa pertanyaan'],['✓','100% Asli','Garansi produk']].map(([ic,t,s])=>(
-              <div key={t} style={{display:'flex',alignItems:'center',gap:7,flex:1,minWidth:90}}><span style={{fontSize:14}}>{ic}</span><div><div style={{fontSize:11,fontWeight:700,color:C.ink2}}>{t}</div><div style={{fontSize:10,color:C.ink4}}>{s}</div></div></div>
-            ))}
-          </div>
+
         </div>
       </div>
       <div style={{marginBottom:36}}>
@@ -816,7 +827,10 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
         <div style={{padding:'12px 18px',borderBottom:`1px solid ${C.ink6}`,display:'flex',flexDirection:'column',gap:9}}>
           {cart.map((item:any,i:number)=>(
             <div key={i} style={{display:'flex',gap:9,alignItems:'flex-start'}}>
-              <div style={{width:44,height:44,background:C.cream,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0,position:'relative'}}>{item.emoji}<span style={{position:'absolute',top:-5,right:-5,background:C.g700,color:'#fff',width:15,height:15,borderRadius:'50%',fontSize:8,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center'}}>{item.qty}</span></div>
+              <div style={{width:44,height:44,background:C.cream,borderRadius:8,overflow:'hidden',flexShrink:0,position:'relative',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                {item.image_url?<img src={item.image_url} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:22}}>{item.emoji}</span>}
+                <span style={{position:'absolute',top:-5,right:-5,background:C.g700,color:'#fff',width:15,height:15,borderRadius:'50%',fontSize:8,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center'}}>{item.qty}</span>
+              </div>
               <div style={{flex:1}}><p style={{margin:'0 0 1px',fontSize:11,fontWeight:700,color:C.ink}}>{item.name}</p><p style={{margin:0,fontSize:10,color:C.ink4}}>Size {item.size}</p><p style={{margin:'1px 0 0',fontSize:12,fontWeight:700,color:C.g700}}>{fmt(item.price*(item.qty||1))}</p></div>
             </div>
           ))}
@@ -870,7 +884,9 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
         <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,padding:'12px 16px',marginBottom:20,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
           <div style={{display:'flex',gap:6,alignItems:'center',overflow:'hidden'}}>
             {cart.slice(0,3).map((item:any,i:number)=>(
-              <div key={i} style={{width:36,height:36,background:C.cream,borderRadius:7,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{item.emoji}</div>
+              <div key={i} style={{width:36,height:36,background:C.cream,borderRadius:7,overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                {item.image_url?<img src={item.image_url} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:18}}>{item.emoji}</span>}
+              </div>
             ))}
             {cart.length>3&&<span style={{fontSize:11,color:C.ink4}}>+{cart.length-3}</span>}
             <span style={{fontSize:12,color:C.ink3,marginLeft:4}}>{cart.length} item{cart.length>1?'s':''}</span>
@@ -908,7 +924,9 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
               </div>
               :<>{cart.map((item:any,i:number)=>(
                 <div key={i} style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:13,padding:'14px 16px',display:'flex',gap:12,alignItems:'center'}}>
-                  <div style={{width:68,height:68,background:C.cream,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:36,flexShrink:0}}>{item.emoji}</div>
+                  <div style={{width:68,height:68,background:C.cream,borderRadius:10,overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    {item.image_url?<img src={item.image_url} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:36}}>{item.emoji}</span>}
+                  </div>
                   <div style={{flex:1,minWidth:0}}><p style={{margin:'0 0 2px',fontSize:9,fontWeight:700,color:C.g500,letterSpacing:'0.1em',textTransform:'uppercase'}}>{item.sport}</p><p style={{margin:'0 0 3px',fontSize:13,fontWeight:700,color:C.ink}}>{item.name}</p><p style={{margin:0,fontSize:11,color:C.ink4}}>Size {item.size} · {item.color}</p></div>
                   <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:8}}>
                     <button onClick={()=>setCart((c:any[])=>c.filter((_,idx)=>idx!==i))} style={{background:'none',border:'none',cursor:'pointer',color:C.ink4,fontSize:15,padding:'2px',lineHeight:1}}>✕</button>
