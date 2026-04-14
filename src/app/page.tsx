@@ -59,6 +59,8 @@ const SPORTS_LIST = ['Tennis','Badminton','Padel','Hyrox','Gym','Running','Golf'
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const MONTH_ID: Record<string,string> = {Jan:'Januari',Feb:'Februari',Mar:'Maret',Apr:'April',May:'Mei',Jun:'Juni',Jul:'Juli',Aug:'Agustus',Sep:'September',Oct:'Oktober',Nov:'November',Dec:'Desember'}
 const PPN = 0.11
+// ✏️ EDIT TEKS ANNOUNCEMENT BAR DI SINI:
+let ANNOUNCEMENT_TEXT = 'FREE SHIPPING di atas Rp 500.000 · Kode <strong style="color:#86BC91">ELITE20</strong> diskon 20%'
 const SUPERIOR_PIN = '082505'
 const SHIPPING_OPTIONS = [
   {id:'regular',label:'Regular Delivery',desc:'3–5 hari kerja',price:25000,icon:'📦'},
@@ -183,7 +185,7 @@ function StoreNavbar({nav,cartCount,onCartClick,scrolled}:{nav:(p:string,d?:any)
   const [mobileMenu,setMobileMenu]=useState(false)
   return <nav style={{position:'fixed',top:0,left:0,right:0,zIndex:500,background:scrolled||mobileMenu?'rgba(250,248,244,0.97)':' transparent',backdropFilter:scrolled||mobileMenu?'blur(12px)':'none',borderBottom:scrolled||mobileMenu?`1px solid ${C.ink6}`:'none',transition:'all 0.3s'}}>
     <div style={{background:C.g800,padding:'6px 5vw',textAlign:'center'}}>
-      <span style={{fontSize:10,color:C.g100,fontWeight:500}}>FREE SHIPPING di atas Rp 500.000 · Kode <strong style={{color:C.g300}}>ELITE20</strong> diskon 20%</span>
+      <span style={{fontSize:10,color:C.g100,fontWeight:500}} dangerouslySetInnerHTML={{__html:ANNOUNCEMENT_TEXT}}/>
     </div>
     <div style={{maxWidth:1280,margin:'0 auto',height:56,padding:'0 5vw',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
       {/* LOGO */}
@@ -193,7 +195,7 @@ function StoreNavbar({nav,cartCount,onCartClick,scrolled}:{nav:(p:string,d?:any)
       </button>
       {/* DESKTOP MENU */}
       <div className="desktop-only" style={{display:'flex',gap:28}}>
-        {['Collection','Sports','About'].map(l=><button key={l} onClick={()=>l==='Collection'&&nav('catalog')} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:500,color:C.ink2,padding:0}}>{l}</button>)}
+        {[['Collection','catalog'],['Sports','catalog'],['Our Athletes','athletes'],['About','home']].map(([l,p])=><button key={l} onClick={()=>nav(p)} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:500,color:C.ink2,padding:0}}>{l}</button>)}
       </div>
       {/* RIGHT ICONS */}
       <div style={{display:'flex',alignItems:'center',gap:6}}>
@@ -212,7 +214,7 @@ function StoreNavbar({nav,cartCount,onCartClick,scrolled}:{nav:(p:string,d?:any)
     </div>
     {/* MOBILE DROPDOWN MENU */}
     {mobileMenu&&<div style={{background:'rgba(250,248,244,0.98)',borderTop:`1px solid ${C.ink6}`,padding:'16px 5vw 20px',animation:'slideDown 0.2s ease'}}>
-      {[['🛍️','Collection','catalog'],['⚽','Sports','catalog'],['ℹ️','About','home']].map(([ic,label,page])=>(
+      {[['🛍️','Collection','catalog'],['⚽','Sports','catalog'],['🏅','Our Athletes','athletes'],['ℹ️','About','home']].map(([ic,label,page])=>(
         <button key={label} onClick={()=>{nav(page);setMobileMenu(false)}} style={{width:'100%',display:'flex',alignItems:'center',gap:12,padding:'13px 0',background:'none',border:'none',cursor:'pointer',borderBottom:`1px solid ${C.ink6}`,fontSize:15,fontWeight:500,color:C.ink2}}>
           <span style={{fontSize:18}}>{ic}</span>{label}
         </button>
@@ -256,46 +258,76 @@ function CartDrawer({cart,onClose,onRemove,onCheckout}:{cart:any[],onClose:()=>v
 // ═══════════════════════════════════════════════════════════
 function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addToCart:(item:any)=>void,cartCount:number}) {
   const [scrolled,setScrolled]=useState(false)
+  const [heroSlide,setHeroSlide]=useState(0)
   const [showCart,setShowCart]=useState(false)
   const [cart,setCart]=useState<any[]>([])
   const [toast,setToast]=useState<string|null>(null)
   useEffect(()=>{const fn=()=>setScrolled(window.scrollY>30);window.addEventListener('scroll',fn);return()=>window.removeEventListener('scroll',fn)},[])
+  },[])  
+  useEffect(()=>{
+    const timer=setInterval(()=>setHeroSlide((s:number)=>(s+1)%5),5000)
+    return()=>clearInterval(timer)
   function handleAdd(p:any){const item={...p,qty:1,size:p.sizes[0]};setCart(c=>[...c,item]);addToCart(item);setToast(p.name)}
   const cats=[{icon:'🎾',label:'Tennis',count:48},{icon:'🏸',label:'Badminton',count:22},{icon:'🏓',label:'Padel',count:36},{icon:'🏋️',label:'Hyrox',count:29},{icon:'💪',label:'Gym',count:112},{icon:'🏃',label:'Running',count:94},{icon:'⛳',label:'Golf',count:41},{icon:'🧘',label:'Pilates',count:33},{icon:'🪷',label:'Yoga',count:57},{icon:'👟',label:'Footwear',count:18},{icon:'🎒',label:'Aksesoris',count:24}]
   return <div style={{background:C.cream,minHeight:'100vh'}}>
     {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
     {showCart&&<CartDrawer cart={cart} onClose={()=>setShowCart(false)} onRemove={i=>setCart(c=>c.filter((_,idx)=>idx!==i))} onCheckout={()=>{setShowCart(false);nav('checkout')}}/>}
     <StoreNavbar nav={nav} cartCount={cartCount} onCartClick={()=>setShowCart(true)} scrolled={scrolled}/>
-    {/* HERO */}
-    <section style={{paddingTop:56+28,minHeight:'85vh',display:'flex',alignItems:'center',background:C.cream,position:'relative',overflow:'hidden'}}>
-      <div className="hero-bg" style={{position:'absolute',top:0,right:0,width:'44%',height:'100%',background:C.g800,clipPath:'polygon(12% 0, 100% 0, 100% 100%, 0 100%)'}}/>
-      <div className="hero-grid" style={{maxWidth:1280,margin:'0 auto',padding:'48px 5vw',width:'100%',display:'grid',gridTemplateColumns:'1fr 1fr',gap:0,alignItems:'center',position:'relative',zIndex:1}}>
-        <div style={{paddingRight:'8%'}}>
-          <p style={{margin:'0 0 14px',fontSize:11,fontWeight:600,color:C.g500,letterSpacing:'0.18em',textTransform:'uppercase',display:'flex',alignItems:'center',gap:8}}><span style={{display:'inline-block',width:22,height:1.5,background:C.g500}}/>New Season 2025</p>
-          <h1 style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(2rem,7vw,4rem)',fontWeight:400,lineHeight:1.08,margin:'0 0 18px',letterSpacing:'-0.02em',color:C.ink}}>Gear Built for<br/><em style={{color:C.g700,fontStyle:'italic'}}>Elite</em> Athletes</h1>
-          <p style={{fontSize:14,color:C.ink3,lineHeight:1.8,margin:'0 0 28px',maxWidth:400}}>Premium sport wear untuk Tennis, Badminton, Padel, Hyrox, Running, Golf, dan lebih. Dirancang untuk performa, nyaman dipakai seharian.</p>
-          <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:36}}>
-            <button onClick={()=>nav('catalog')} style={{background:C.g800,color:C.cream,border:'none',borderRadius:10,padding:'13px 26px',fontSize:14,fontWeight:600,cursor:'pointer'}}>Shop Collection</button>
-          </div>
-          <div className="stats-row" style={{display:'flex',gap:0,paddingTop:22,borderTop:`1px solid ${C.ink6}`}}>
-            {[['15K+','Athletes'],['12','Sports'],['4.9 ★','Rating'],['2 Jam','Pengiriman']].map(([v,l],i)=>(
-              <div key={l} style={{flex:1,paddingLeft:i>0?14:0,paddingRight:14,borderLeft:i>0?`1px solid ${C.ink6}`:'none'}}>
-                <div style={{fontSize:'clamp(14px,4vw,19px)',fontWeight:700,color:C.g700}}>{v}</div>
-                <div style={{fontSize:10,color:C.ink4,fontWeight:500,marginTop:2}}>{l}</div>
+    {/* HERO CAROUSEL */}
+    {(()=>{
+      const SLIDES = [
+        {id:1, bg:C.g800, label:'New Season 2025', title:'Gear Built for', titleItalic:'Elite Athletes', subtitle:'Premium sport wear untuk Tennis, Badminton, Padel, Hyrox, Running, Golf, dan lebih.', cta:'Shop Collection', image:null, emoji:'👟'},
+        {id:2, bg:'#1A2E1E', label:'New Arrival', title:'Court Precision', titleItalic:'Polo Series', subtitle:'Engineered for match-day performance. Moisture-wicking, UV Protection.', cta:'Lihat Koleksi', image:null, emoji:'🎾'},
+        {id:3, bg:'#2D4A35', label:'Best Seller', title:'Run Further,', titleItalic:'Run Faster', subtitle:'AeroStride collection — designed for every stride. 4-way stretch, reflective details.', cta:'Shop Running', image:null, emoji:'🏃'},
+        {id:4, bg:'#1F3B24', label:'New Sport', title:'Badminton', titleItalic:'Performance Wear', subtitle:'Lightweight, breathable, built for the court. Move freely, play harder.', cta:'Explore Now', image:null, emoji:'🏸'},
+        {id:5, bg:'#243D2A', label:'Limited Edition', title:'Hyrox Ready', titleItalic:'Collection', subtitle:'Built for the toughest workouts. Anti-odor, seamless construction.', cta:'Shop Hyrox', image:null, emoji:'🏋️'},
+      ]
+      return (
+        <section style={{paddingTop:56+28,background:C.cream,position:'relative',overflow:'hidden'}}>
+          <div style={{position:'relative',height:'min(85vh,600px)',overflow:'hidden'}}>
+            {SLIDES.map((slide,idx)=>(
+              <div key={slide.id} style={{position:'absolute',inset:0,transition:'opacity 0.6s ease',opacity:heroSlide===idx?1:0,pointerEvents:heroSlide===idx?'auto':'none'}}>
+                <div style={{position:'absolute',top:0,right:0,width:'44%',height:'100%',background:slide.bg,clipPath:'polygon(12% 0, 100% 0, 100% 100%, 0 100%)'}}/>
+                <div style={{maxWidth:1280,margin:'0 auto',padding:'48px 5vw',width:'100%',height:'100%',display:'grid',gridTemplateColumns:'1fr 1fr',gap:0,alignItems:'center',position:'relative',zIndex:1,boxSizing:'border-box'}}>
+                  <div style={{paddingRight:'8%'}}>
+                    <p style={{margin:'0 0 14px',fontSize:11,fontWeight:600,color:C.g500,letterSpacing:'0.18em',textTransform:'uppercase',display:'flex',alignItems:'center',gap:8}}><span style={{display:'inline-block',width:22,height:1.5,background:C.g500}}/>{slide.label}</p>
+                    <h1 style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(2rem,5vw,3.8rem)',fontWeight:400,lineHeight:1.08,margin:'0 0 16px',letterSpacing:'-0.02em',color:C.ink}}>{slide.title}<br/><em style={{color:C.g700,fontStyle:'italic'}}>{slide.titleItalic}</em></h1>
+                    <p style={{fontSize:14,color:C.ink3,lineHeight:1.8,margin:'0 0 28px',maxWidth:400}}>{slide.subtitle}</p>
+                    <button onClick={()=>nav('catalog')} style={{background:C.g800,color:C.cream,border:'none',borderRadius:10,padding:'13px 26px',fontSize:14,fontWeight:600,cursor:'pointer'}}>{slide.cta}</button>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',paddingLeft:'6%'}}>
+                    {slide.image
+                      ?<img src={slide.image} alt={slide.title} style={{width:'min(340px,55vw)',height:'min(380px,55vw)',objectFit:'cover',borderRadius:24}}/>
+                      :<div style={{width:'min(300px,55vw)',height:'min(340px,55vw)',background:'rgba(255,255,255,0.06)',borderRadius:24,border:'1px solid rgba(255,255,255,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'clamp(60px,12vw,100px)'}}>{slide.emoji}</div>
+                    }
+                  </div>
+                </div>
               </div>
             ))}
+            {/* DOTS */}
+            <div style={{position:'absolute',bottom:20,left:'50%',transform:'translateX(-50%)',display:'flex',gap:8,zIndex:10}}>
+              {SLIDES.map((_,i)=>(
+                <button key={i} onClick={()=>setHeroSlide(i)} style={{width:i===heroSlide?24:8,height:8,borderRadius:4,background:i===heroSlide?C.g400:'rgba(255,255,255,0.4)',border:'none',cursor:'pointer',transition:'all 0.3s',padding:0}}/>
+              ))}
+            </div>
+            {/* ARROWS */}
+            <button onClick={()=>setHeroSlide(s=>(s-1+SLIDES.length)%SLIDES.length)} style={{position:'absolute',left:16,top:'50%',transform:'translateY(-50%)',width:40,height:40,borderRadius:'50%',background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'#fff',cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',zIndex:10,backdropFilter:'blur(4px)'}}>‹</button>
+            <button onClick={()=>setHeroSlide(s=>(s+1)%SLIDES.length)} style={{position:'absolute',right:16,top:'50%',transform:'translateY(-50%)',width:40,height:40,borderRadius:'50%',background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'#fff',cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',zIndex:10,backdropFilter:'blur(4px)'}}>›</button>
           </div>
-        </div>
-        <div className="hero-right" style={{display:'flex',alignItems:'center',justifyContent:'center',paddingLeft:'6%'}}>
-          <div style={{width:'min(300px,60vw)',height:'min(340px,60vw)',background:'rgba(255,255,255,0.06)',borderRadius:24,border:'1px solid rgba(255,255,255,0.12)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:14,position:'relative'}}>
-            <span style={{fontSize:'clamp(60px,12vw,90px)'}}>👟</span>
-            <div style={{textAlign:'center'}}><p style={{margin:0,fontSize:11,fontWeight:600,color:'rgba(255,255,255,0.5)',letterSpacing:'0.08em',textTransform:'uppercase'}}>Featured</p><p style={{margin:'4px 0 0',fontSize:15,fontWeight:700,color:'#fff'}}>Court Precision Polo</p><p style={{margin:'5px 0 0',fontSize:14,fontWeight:600,color:C.g300}}>{fmt(649000)}</p></div>
-            <button onClick={()=>handleAdd(ALL_PRODUCTS[0])} style={{background:C.g400,color:'#fff',border:'none',borderRadius:9,padding:'8px 20px',fontSize:12,fontWeight:700,cursor:'pointer'}}>Add to Cart</button>
-            <div style={{position:'absolute',top:14,right:-10,background:C.cream,borderRadius:10,padding:'6px 10px',boxShadow:'0 4px 16px rgba(0,0,0,0.12)'}}><div style={{fontSize:9,fontWeight:700,color:C.g700,letterSpacing:'0.06em',textTransform:'uppercase'}}>Best Seller</div><div style={{fontSize:10,color:C.ink3,marginTop:1}}>214 reviews</div></div>
+          {/* STATS BAR */}
+          <div style={{background:C.white,borderTop:`1px solid ${C.ink6}`,padding:'14px 5vw'}}>
+            <div className="stats-row" style={{maxWidth:1280,margin:'0 auto',display:'flex',gap:0}}>
+              {[['15K+','Athletes'],['12','Sports'],['4.9 ★','Rating'],['2 Jam','Pengiriman']].map(([v,l],i)=>(
+                <div key={l} style={{flex:1,paddingLeft:i>0?14:0,paddingRight:14,borderLeft:i>0?`1px solid ${C.ink6}`:'none',textAlign:'center'}}>
+                  <div style={{fontSize:'clamp(14px,3vw,19px)',fontWeight:700,color:C.g700}}>{v}</div>
+                  <div style={{fontSize:10,color:C.ink4,fontWeight:500,marginTop:2}}>{l}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </div>
-    </section>
+        </section>
+      )
+    })()}
     {/* CATEGORIES */}
     <section style={{padding:'68px 5vw',background:C.white}}>
       <div style={{maxWidth:1280,margin:'0 auto'}}>
@@ -334,24 +366,6 @@ function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
         {[['⚡','Performance Tech','Advanced fabrics'],['🌿','Sustainably Made','Eco-conscious'],['📦','Fast Delivery','2-hour same-day'],['↩️','30-Day Returns','No questions']].map(([ic,t,s])=>(
           <div key={t} style={{display:'flex',alignItems:'center',gap:12}}><span style={{fontSize:20}}>{ic}</span><div><div style={{fontSize:13,fontWeight:700,color:C.g100}}>{t}</div><div style={{fontSize:11,color:C.g300}}>{s}</div></div></div>
         ))}
-      </div>
-    </section>
-    {/* TESTIMONIALS */}
-    <section style={{padding:'68px 5vw',background:C.white}}>
-      <div style={{maxWidth:1280,margin:'0 auto'}}>
-        <div style={{textAlign:'center',marginBottom:44}}><p style={{margin:'0 0 7px',fontSize:11,fontWeight:600,color:C.g500,letterSpacing:'0.14em',textTransform:'uppercase'}}>Athlete Reviews</p><h2 style={{margin:0,fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.5rem,3vw,2.2rem)',fontWeight:400,color:C.ink}}>Worn & Trusted by Athletes</h2></div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(270px,1fr))',gap:18}}>
-          {[{name:'Rina S.',sport:'Tennis',text:'Kualitas polo-nya luar biasa. Tetap segar bahkan di set terakhir.',avatar:'RS'},{name:'Bagas W.',sport:'Hyrox',text:'Paling nyaman buat WOD. Gerakan bebas total, tidak pernah gerah.',avatar:'BW'},{name:'Citra A.',sport:'Yoga',text:'Bahan leggings-nya terasa premium di kulit. Worth every penny.',avatar:'CA'}].map(t=>(
-            <div key={t.name} style={{background:C.cream,border:`1px solid ${C.ink6}`,borderRadius:16,padding:'24px'}}>
-              <div style={{display:'flex',gap:3,marginBottom:12}}>{[1,2,3,4,5].map(i=><svg key={i} width="12" height="12" viewBox="0 0 12 12"><polygon points="6,1 7.5,4.5 11,5 8.5,7.5 9.2,11 6,9.2 2.8,11 3.5,7.5 1,5 4.5,4.5" fill={C.gold2}/></svg>)}</div>
-              <p style={{margin:'0 0 18px',fontSize:14,color:C.ink2,lineHeight:1.75,fontStyle:'italic'}}>"{t.text}"</p>
-              <div style={{display:'flex',alignItems:'center',gap:10}}>
-                <div style={{width:34,height:34,borderRadius:'50%',background:C.g100,border:`1px solid ${C.g200}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:C.g700}}>{t.avatar}</div>
-                <div><div style={{fontSize:13,fontWeight:700,color:C.ink}}>{t.name}</div><div style={{fontSize:11,color:C.g500,fontWeight:500}}>{t.sport} Athlete</div></div>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
     </section>
     {/* FOOTER */}
@@ -593,36 +607,7 @@ function DetailPage({product:p,nav,addToCart,cartCount}:{product:any,nav:(pg:str
         </div>
       </div>
       <div style={{marginBottom:36}}>
-        <div style={{display:'flex',borderBottom:`2px solid ${C.ink6}`,gap:0,marginBottom:24}}>
-          {[['description','Deskripsi'],['features','Fitur'],['reviews',`Reviews (${p.reviews})`]].map(([v,l])=>(
-            <button key={v} onClick={()=>setTab(v)} style={{background:'none',border:'none',cursor:'pointer',padding:'10px 20px',fontSize:13,fontWeight:tab===v?700:500,color:tab===v?C.g700:C.ink3,borderBottom:`2px solid ${tab===v?C.g600:'transparent'}`,marginBottom:-2,transition:'all 0.15s'}}>{l}</button>
-          ))}
-        </div>
-        {tab==='description'&&<p style={{fontSize:14,color:C.ink2,lineHeight:1.85,maxWidth:620,margin:0}}>{p.desc} Crafted with our latest performance fabric technology, this piece delivers the perfect balance of athletic function and refined style.</p>}
-        {tab==='features'&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(230px,1fr))',gap:10}}>{[...p.tags,'Quick-Dry Fabric','Flatlock Seams','Machine Washable'].map((f:string)=>(
-          <div key={f} style={{display:'flex',alignItems:'center',gap:10,background:C.white,border:`1px solid ${C.ink6}`,borderRadius:10,padding:'11px 13px'}}>
-            <div style={{width:24,height:24,borderRadius:'50%',background:C.g50,border:`1px solid ${C.g100}`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke={C.g600} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
-            <span style={{fontSize:13,fontWeight:500,color:C.ink2}}>{f}</span>
-          </div>
-        ))}</div>}
-        {tab==='reviews'&&<div style={{display:'flex',gap:28,flexWrap:'wrap'}}>
-          <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:14,padding:'22px 26px',textAlign:'center',minWidth:160}}>
-            <div style={{fontSize:44,fontWeight:800,color:C.ink,letterSpacing:'-0.04em'}}>{p.rating}</div>
-            <Stars r={p.rating} size={14}/>
-            <div style={{fontSize:12,color:C.ink4,marginTop:7}}>{p.reviews} reviews</div>
-          </div>
-          <div style={{flex:1,display:'flex',flexDirection:'column',gap:12,minWidth:260}}>
-            {[{name:'Sarah K.',date:'2 minggu lalu',text:'Perfect fit and incredibly comfortable!',rating:5},{name:'Michael T.',date:'1 bulan lalu',text:'Great quality. Fast shipping too.',rating:4}].map((r,i)=>(
-              <div key={i} style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,padding:'16px 18px'}}>
-                <div style={{display:'flex',justifyContent:'space-between',marginBottom:8,flexWrap:'wrap',gap:7}}>
-                  <div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:30,height:30,borderRadius:'50%',background:C.g100,border:`1px solid ${C.g200}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:C.g700}}>{r.name.split(' ').map(w=>w[0]).join('')}</div><div><div style={{fontSize:12,fontWeight:700,color:C.ink}}>{r.name}</div><div style={{fontSize:10,color:C.ink4}}>{r.date}</div></div></div>
-                  <Stars r={r.rating} size={11}/>
-                </div>
-                <p style={{margin:0,fontSize:13,color:C.ink2,lineHeight:1.65,fontStyle:'italic'}}>"{r.text}"</p>
-              </div>
-            ))}
-          </div>
-        </div>}
+        <p style={{fontSize:14,color:C.ink2,lineHeight:1.85,maxWidth:620,margin:0}}>{p.desc||'Produk premium dari The Elite Athletes, dirancang untuk performa dan kenyamanan optimal.'}</p>
       </div>
       {related.length>0&&<div>
         <h2 style={{margin:'0 0 20px',fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.3rem,2.5vw,1.7rem)',fontWeight:400,color:C.ink}}>You Might Also Like</h2>
@@ -929,7 +914,7 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
 // ═══════════════════════════════════════════════════════════
 // ADMIN LAYOUT + PAGES
 // ═══════════════════════════════════════════════════════════
-const ADMIN_NAV=[{id:'overview',icon:'◈',label:'Overview'},{id:'orders',icon:'📋',label:'Orders'},{id:'inventory',icon:'📦',label:'Inventory'},{id:'customers',icon:'👥',label:'Customers'},{id:'financial',icon:'📊',label:'Financial'},{id:'integrations',icon:'🔌',label:'Integrations'}]
+const ADMIN_NAV=[{id:'overview',icon:'◈',label:'Overview'},{id:'orders',icon:'📋',label:'Orders'},{id:'inventory',icon:'📦',label:'Inventory'},{id:'customers',icon:'👥',label:'Customers'},{id:'financial',icon:'📊',label:'Financial'},{id:'content',icon:'🖼️',label:'Content'},{id:'integrations',icon:'🔌',label:'Integrations'}]
 const STATUS_FLOW:Record<string,string[]>={pending:['processing','cancelled'],processing:['shipped','cancelled'],shipped:['delivered'],delivered:[],cancelled:[]}
 
 function AdminLayout({page,setPage,children,nav,collapsed,setCollapsed}:{page:string,setPage:(p:string)=>void,children:React.ReactNode,nav:(p:string,d?:any)=>void,collapsed:boolean,setCollapsed:(c:boolean)=>void}) {
@@ -1805,6 +1790,154 @@ function AdminFinancial() {
   </div>
 }
 
+// ═══════════════════════════════════════════════════════════
+// ADMIN: CONTENT MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+function AdminContent() {
+  const SLIDE_DEFAULTS = [
+    {id:1,label:'New Season 2025',title:'Gear Built for',titleItalic:'Elite Athletes',subtitle:'Premium sport wear untuk Tennis, Badminton, Padel, Hyrox, Running, Golf, dan lebih.',cta:'Shop Collection',emoji:'👟',image:''},
+    {id:2,label:'New Arrival',title:'Court Precision',titleItalic:'Polo Series',subtitle:'Engineered for match-day performance. Moisture-wicking, UV Protection.',cta:'Lihat Koleksi',emoji:'🎾',image:''},
+    {id:3,label:'Best Seller',title:'Run Further,',titleItalic:'Run Faster',subtitle:'AeroStride collection — designed for every stride. 4-way stretch, reflective details.',cta:'Shop Running',emoji:'🏃',image:''},
+    {id:4,label:'New Sport',title:'Badminton',titleItalic:'Performance Wear',subtitle:'Lightweight, breathable, built for the court. Move freely, play harder.',cta:'Explore Now',emoji:'🏸',image:''},
+    {id:5,label:'Limited Edition',title:'Hyrox Ready',titleItalic:'Collection',subtitle:'Built for the toughest workouts. Anti-odor, seamless construction.',cta:'Shop Hyrox',emoji:'🏋️',image:''},
+  ]
+
+  const [slides,setSlides]=useState(SLIDE_DEFAULTS)
+  const [activeSlide,setActiveSlide]=useState(0)
+  const [announcement,setAnnouncement]=useState('FREE SHIPPING di atas Rp 500.000 · Kode ELITE20 diskon 20%')
+  const [announcementSaved,setAnnouncementSaved]=useState(false)
+  const [uploadingSlide,setUploadingSlide]=useState(false)
+  const [saved,setSaved]=useState(false)
+
+  async function uploadBanner(file:File, slideIdx:number){
+    setUploadingSlide(true)
+    try{
+      const ext=file.name.split('.').pop()
+      const fileName=`banner-${slideIdx+1}-${Date.now()}.${ext}`
+      const { createClient } = await import('@supabase/supabase-js')
+      const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+      const { error } = await sb.storage.from('product-images').upload(`banners/${fileName}`, file, {upsert:true})
+      if(error) throw error
+      const { data } = sb.storage.from('product-images').getPublicUrl(`banners/${fileName}`)
+      setSlides(prev=>prev.map((s,i)=>i===slideIdx?{...s,image:data.publicUrl}:s))
+      setSaved(false)
+    }catch(e){alert('Upload gagal: '+e)}
+    finally{setUploadingSlide(false)}
+  }
+
+  function saveAnnouncement(){
+    // Update global ANNOUNCEMENT_TEXT
+    ;(window as any).ANNOUNCEMENT_TEXT_LIVE = announcement
+    // Force update announcement bar
+    const spans = document.querySelectorAll('[data-announcement]')
+    spans.forEach(s => {s.innerHTML = announcement})
+    setAnnouncementSaved(true)
+    setTimeout(()=>setAnnouncementSaved(false), 3000)
+  }
+
+  const slide = slides[activeSlide]
+
+  return <div style={{display:'flex',flexDirection:'column',gap:20}}>
+    {/* ANNOUNCEMENT BAR EDITOR */}
+    <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:14,padding:'20px 22px'}}>
+      <h3 style={{margin:'0 0 4px',fontSize:15,fontWeight:700,color:C.ink}}>📢 Announcement Bar</h3>
+      <p style={{margin:'0 0 14px',fontSize:12,color:C.ink4}}>Teks yang tampil di bar hijau paling atas website</p>
+      <div style={{background:C.g800,borderRadius:9,padding:'10px 16px',marginBottom:14,textAlign:'center'}}>
+        <span style={{fontSize:12,color:C.g100}}>{announcement||'(kosong)'}</span>
+      </div>
+      <textarea
+        value={announcement}
+        onChange={e=>setAnnouncement(e.target.value)}
+        rows={2}
+        style={{width:'100%',padding:'10px 12px',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink,resize:'vertical',boxSizing:'border-box'}}
+        placeholder="FREE SHIPPING di atas Rp 500.000 · Kode ELITE20 diskon 20%"
+      />
+      <div style={{display:'flex',alignItems:'center',gap:10,marginTop:10}}>
+        <button onClick={saveAnnouncement} style={{padding:'9px 20px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>
+          {announcementSaved?'✓ Tersimpan!':'Simpan'}
+        </button>
+        <p style={{margin:0,fontSize:11,color:C.ink4}}>Perubahan langsung terlihat. Untuk permanen, edit ANNOUNCEMENT_TEXT di kode.</p>
+      </div>
+    </div>
+
+    {/* BANNER CAROUSEL EDITOR */}
+    <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:14,padding:'20px 22px'}}>
+      <h3 style={{margin:'0 0 4px',fontSize:15,fontWeight:700,color:C.ink}}>🖼️ Hero Banner Carousel</h3>
+      <p style={{margin:'0 0 16px',fontSize:12,color:C.ink4}}>Edit teks dan upload foto untuk setiap slide banner</p>
+
+      {/* SLIDE TABS */}
+      <div style={{display:'flex',gap:7,marginBottom:18,flexWrap:'wrap'}}>
+        {slides.map((s,i)=>(
+          <button key={i} onClick={()=>setActiveSlide(i)} style={{padding:'7px 14px',borderRadius:8,fontSize:12,fontWeight:activeSlide===i?700:500,cursor:'pointer',background:activeSlide===i?C.g800:C.cream,color:activeSlide===i?'#fff':C.ink2,border:`1px solid ${activeSlide===i?C.g800:C.ink5}`}}>
+            Slide {i+1}{s.image?' 📷':''}
+          </button>
+        ))}
+      </div>
+
+      {/* SLIDE EDITOR */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+        {/* LEFT: FIELDS */}
+        <div style={{display:'flex',flexDirection:'column',gap:11}}>
+          {[
+            {label:'Label (kecil di atas)',key:'label',placeholder:'New Season 2025'},
+            {label:'Judul Baris 1',key:'title',placeholder:'Gear Built for'},
+            {label:'Judul Italic (hijau)',key:'titleItalic',placeholder:'Elite Athletes'},
+            {label:'Subjudul',key:'subtitle',placeholder:'Premium sport wear...'},
+            {label:'Teks Tombol CTA',key:'cta',placeholder:'Shop Collection'},
+            {label:'Emoji (jika tidak ada foto)',key:'emoji',placeholder:'👟'},
+          ].map(f=>(
+            <div key={f.key}>
+              <label style={{fontSize:11,fontWeight:600,color:C.ink4,display:'block',marginBottom:3}}>{f.label}</label>
+              <input value={(slide as any)[f.key]} onChange={e=>setSlides(prev=>prev.map((s,i)=>i===activeSlide?{...s,[f.key]:e.target.value}:s))} placeholder={f.placeholder} style={{width:'100%',padding:'8px 11px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box'}}/>
+            </div>
+          ))}
+        </div>
+
+        {/* RIGHT: IMAGE UPLOAD */}
+        <div style={{display:'flex',flexDirection:'column',gap:12}}>
+          <label style={{fontSize:11,fontWeight:600,color:C.ink4}}>Foto Banner</label>
+          <div style={{height:180,background:C.g800,borderRadius:12,overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
+            {slide.image
+              ?<img src={slide.image} alt="banner" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+              :<div style={{textAlign:'center'}}><div style={{fontSize:48,marginBottom:8}}>{slide.emoji}</div><p style={{margin:0,fontSize:11,color:'rgba(255,255,255,0.4)'}}>Belum ada foto</p></div>
+            }
+            {slide.image&&<button onClick={()=>setSlides(prev=>prev.map((s,i)=>i===activeSlide?{...s,image:''}:s))} style={{position:'absolute',top:8,right:8,background:'rgba(0,0,0,0.5)',color:'#fff',border:'none',borderRadius:6,padding:'4px 8px',fontSize:11,cursor:'pointer'}}>✕ Hapus</button>}
+          </div>
+          <input type="file" accept="image/*" id={`banner-upload-${activeSlide}`} style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)uploadBanner(f,activeSlide)}}/>
+          <label htmlFor={`banner-upload-${activeSlide}`} style={{display:'block',padding:'10px',background:uploadingSlide?C.ink5:C.g50,color:uploadingSlide?C.ink4:C.g700,border:`1px solid ${C.g200}`,borderRadius:9,fontSize:13,fontWeight:600,cursor:uploadingSlide?'not-allowed':'pointer',textAlign:'center'}}>
+            {uploadingSlide?'⏳ Uploading...':'📤 Upload Foto Banner'}
+          </label>
+          <p style={{margin:0,fontSize:10,color:C.ink4}}>Rekomendasi: 1440×600px, JPG/PNG. Foto akan menggantikan emoji.</p>
+
+          {/* PREVIEW INFO */}
+          <div style={{background:C.cream,borderRadius:9,padding:'11px 13px'}}>
+            <p style={{margin:'0 0 4px',fontSize:11,fontWeight:700,color:C.ink3}}>Preview Slide {activeSlide+1}</p>
+            <p style={{margin:'0 0 2px',fontSize:11,color:C.ink4}}><strong>Label:</strong> {slide.label}</p>
+            <p style={{margin:'0 0 2px',fontSize:11,color:C.ink4}}><strong>Judul:</strong> {slide.title} {slide.titleItalic}</p>
+            <p style={{margin:0,fontSize:11,color:C.ink4}}><strong>CTA:</strong> {slide.cta}</p>
+          </div>
+        </div>
+      </div>
+
+      <div style={{borderTop:`1px solid ${C.ink6}`,paddingTop:14,marginTop:16,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
+        <p style={{margin:0,fontSize:11,color:C.ink4}}>💡 Foto banner tersimpan permanen di Supabase Storage. Teks slide perlu di-hardcode di kode setelah selesai edit.</p>
+        <div style={{display:'flex',gap:9,alignItems:'center'}}>
+          {saved&&<span style={{fontSize:12,color:C.g500,fontWeight:600}}>✓ Tersimpan!</span>}
+          <button onClick={()=>{setSaved(true);setTimeout(()=>setSaved(false),3000)}} style={{padding:'9px 20px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>Simpan Semua</button>
+        </div>
+      </div>
+    </div>
+
+    {/* QUICK GUIDE */}
+    <div style={{background:C.blueBg,border:`1px solid ${C.blue}20`,borderRadius:12,padding:'14px 16px'}}>
+      <p style={{margin:'0 0 6px',fontSize:13,fontWeight:700,color:C.blue}}>📌 Cara update banner ke website</p>
+      <p style={{margin:'0 0 3px',fontSize:12,color:C.ink3}}>1. Upload foto di sini → copy URL foto yang muncul</p>
+      <p style={{margin:'0 0 3px',fontSize:12,color:C.ink3}}>2. Buka <code style={{background:C.ink6,padding:'1px 5px',borderRadius:4,fontSize:11}}>page.tsx</code> → cari <code style={{background:C.ink6,padding:'1px 5px',borderRadius:4,fontSize:11}}>const SLIDES</code></p>
+      <p style={{margin:0,fontSize:12,color:C.ink3}}>3. Ganti <code style={{background:C.ink6,padding:'1px 5px',borderRadius:4,fontSize:11}}>image:null</code> dengan URL foto, ubah teks slide sesuai keinginan</p>
+    </div>
+  </div>
+}
+
 function AdminIntegrations() {
   const [saved,setSaved]=useState<Record<string,any>>({})
   const [active,setActive]=useState<any>(null)
@@ -1926,6 +2059,61 @@ function AdminIntegrations() {
 // ═══════════════════════════════════════════════════════════
 // ROOT APP — ROUTER
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// PAGE: OUR ATHLETES
+// ═══════════════════════════════════════════════════════════
+const ATHLETES_DATA = [
+  {id:1,name:'Rina Susanti',sport:'Tennis',rank:'National Athlete',quote:'The Elite Athletes gear gives me the confidence to perform at my best every single match.',img:null,initials:'RS',achievement:'Juara 1 Turnamen Nasional 2024'},
+  {id:2,name:'Bagas Wicaksono',sport:'Hyrox',rank:'Elite Athlete',quote:'Training gets harder every day, but with the right gear, I push through every WOD.',img:null,initials:'BW',achievement:'Top 10 Hyrox World Series 2024'},
+  {id:3,name:'Citra Andriani',sport:'Yoga',rank:'Certified Instructor',quote:'Comfort and style combined — exactly what I need for every practice session.',img:null,initials:'CA',achievement:'500h Yoga Alliance Certified'},
+  {id:4,name:'Dewi Rahayu',sport:'Running',rank:'Marathon Runner',quote:'The AeroStride tights are my go-to for every long run. Absolutely game-changing.',img:null,initials:'DR',achievement:'Finisher Jakarta Marathon 2024'},
+  {id:5,name:'Rizky Firmansyah',sport:'Badminton',rank:'Club Champion',quote:'Fast, lightweight, breathable — The Elite Athletes knows what athletes need.',img:null,initials:'RF',achievement:'Juara Klub Badminton Serpong 2024'},
+  {id:6,name:'Andi Pratama',sport:'Gym',rank:'Personal Trainer',quote:'My clients and I trust The Elite Athletes gear for every session in the gym.',img:null,initials:'AP',achievement:'NASM Certified Personal Trainer'},
+]
+
+function OurAthletesPage({nav,cartCount}:{nav:(p:string,d?:any)=>void,cartCount:number}) {
+  return <div style={{background:C.cream,minHeight:'100vh'}}>
+    <StoreNavbar nav={nav} cartCount={cartCount} onCartClick={()=>nav('checkout')} scrolled={true}/>
+    <div style={{background:C.g800,marginTop:56+28,padding:'52px 5vw 48px'}}>
+      <div style={{maxWidth:1280,margin:'0 auto',textAlign:'center'}}>
+        <p style={{margin:'0 0 10px',fontSize:11,fontWeight:600,color:C.g300,letterSpacing:'0.18em',textTransform:'uppercase'}}>The Elite Community</p>
+        <h1 style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(2rem,5vw,3.5rem)',fontWeight:400,color:'#fff',margin:'0 0 16px',lineHeight:1.1}}>Our <em style={{color:C.gold2,fontStyle:'italic'}}>Athletes</em></h1>
+        <p style={{fontSize:15,color:C.g300,maxWidth:520,margin:'0 auto',lineHeight:1.8}}>Meet the real athletes who wear and trust The Elite Athletes gear every day — in competition, training, and life.</p>
+      </div>
+    </div>
+    <div style={{maxWidth:1280,margin:'0 auto',padding:'48px 5vw 68px'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:24}}>
+        {ATHLETES_DATA.map(a=>(
+          <div key={a.id} style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:18,overflow:'hidden',transition:'transform 0.2s'}} onMouseEnter={e=>(e.currentTarget as HTMLElement).style.transform='translateY(-4px)'} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.transform='translateY(0)'}>
+            <div style={{height:200,background:`linear-gradient(135deg, ${C.g700} 0%, ${C.g900} 100%)`,display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
+              {a.img
+                ?<img src={a.img} alt={a.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                :<div style={{width:90,height:90,borderRadius:'50%',background:'rgba(255,255,255,0.15)',border:'3px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#fff'}}>{a.initials}</div>
+              }
+              <div style={{position:'absolute',top:14,right:14,background:'rgba(0,0,0,0.4)',borderRadius:20,padding:'4px 10px',backdropFilter:'blur(4px)'}}><span style={{fontSize:11,fontWeight:600,color:C.gold2}}>{a.sport}</span></div>
+            </div>
+            <div style={{padding:'20px 22px'}}>
+              <h3 style={{margin:'0 0 3px',fontSize:17,fontWeight:700,color:C.ink}}>{a.name}</h3>
+              <p style={{margin:'0 0 6px',fontSize:12,color:C.g500,fontWeight:600}}>{a.rank}</p>
+              <p style={{margin:'0 0 14px',fontSize:11,color:C.ink4,background:C.cream,borderRadius:6,padding:'5px 9px',display:'inline-block'}}>🏆 {a.achievement}</p>
+              <p style={{margin:0,fontSize:13,color:C.ink3,lineHeight:1.75,fontStyle:'italic'}}>"{a.quote}"</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{textAlign:'center',marginTop:52,padding:'40px',background:C.g800,borderRadius:20}}>
+        <p style={{margin:'0 0 8px',fontSize:12,fontWeight:600,color:C.g300,letterSpacing:'0.1em',textTransform:'uppercase'}}>Join Our Community</p>
+        <h2 style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.5rem,3vw,2.2rem)',fontWeight:400,color:'#fff',margin:'0 0 14px'}}>Become an Elite Athlete</h2>
+        <p style={{fontSize:14,color:C.g400,margin:'0 0 24px',maxWidth:420,marginLeft:'auto',marginRight:'auto'}}>Tag us @theeliteathletes di Instagram dan jadilah bagian dari komunitas kami.</p>
+        <button onClick={()=>nav('catalog')} style={{background:C.gold2,color:C.g900,border:'none',borderRadius:10,padding:'13px 30px',fontSize:14,fontWeight:700,cursor:'pointer'}}>Shop the Collection</button>
+      </div>
+    </div>
+    <footer style={{background:C.g900,borderTop:'1px solid rgba(255,255,255,0.06)',padding:'26px 5vw',textAlign:'center'}}>
+      <p style={{margin:0,fontSize:12,color:C.g600}}>© 2025 The Elite Athletes. Made with 💚 in Indonesia.</p>
+    </footer>
+  </div>
+}
+
 export default function App() {
   const [route,      setRoute]      = useState('home')
   const [routeData,  setRouteData]  = useState<any>(null)
@@ -1991,6 +2179,7 @@ export default function App() {
 
     {route==='home'    && <LandingPage  nav={nav} addToCart={addToCart} cartCount={cartCount}/>}
     {route==='catalog' && <CatalogPage  nav={nav} addToCart={addToCart} cartCount={cartCount}/>}
+    {route==='athletes' && <OurAthletesPage nav={nav} cartCount={cart.length}/>}
     {route==='detail'  && routeData && <DetailPage product={routeData} nav={nav} addToCart={addToCart} cartCount={cartCount}/>}
     {route==='checkout'&& <CheckoutPage nav={nav} cart={globalCart} addToCart={addToCart}/>}
 
@@ -2001,6 +2190,7 @@ export default function App() {
         {adminPage==='inventory'    && <AdminInventory    products={ALL_PRODUCTS}/>}
         {adminPage==='customers'    && <AdminCustomers    customers={INIT_CUSTOMERS} orders={INIT_ORDERS}/>}
         {adminPage==='financial'    && <AdminFinancial/>}
+        {adminPage==='content'      && <AdminContent/>}
         {adminPage==='integrations' && <AdminIntegrations/>}
       </AdminLayout>
     )}
