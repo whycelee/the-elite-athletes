@@ -1182,8 +1182,20 @@ function EditProductModal({product:ep,onSave,onDelete,onClose,uploadImageFn}:{pr
     hasSizes:true,
     hasColors:true,
   })
-  const [stock,setStock]=useState<Record<string,number>>({...ep.stock})
-  const [imgs,setImgs]=useState<(string|null)[]>([ep.image_url||null,null,null,null,null])
+  const [stock,setStock]=useState<Record<string,number>>(()=>{
+    const s={...ep.stock}
+    // Pre-populate sizes from ep.sizes that might not be in stock
+    ;(ep.sizes||[]).forEach((sz:string)=>{if(!(sz in s))s[sz]=0})
+    return s
+  })
+  const gallery=ep.gallery&&Array.isArray(ep.gallery)?ep.gallery:[]
+  const [imgs,setImgs]=useState<(string|null)[]>([
+    ep.image_url||gallery[0]||null,
+    gallery[1]||null,
+    gallery[2]||null,
+    gallery[3]||null,
+    gallery[4]||null,
+  ])
   const [uploading,setUploading]=useState(false)
   const [saving,setSaving]=useState(false)
   const [confirmDelete,setConfirmDelete]=useState(false)
@@ -1306,7 +1318,10 @@ function EditProductModal({product:ep,onSave,onDelete,onClose,uploadImageFn}:{pr
             const active=curr.includes(sz)
             return <button key={sz} type="button" onClick={()=>{
               const next=active?curr.filter((s:string)=>s!==sz):[...curr,sz]
-              setForm(p=>({...p,sizes:next.filter(Boolean).join(',')}))
+              const newSizes=next.filter(Boolean)
+              setForm(p=>({...p,sizes:newSizes.join(',')}))
+              // sync stock - add new sizes with 0, keep existing
+              setStock(s=>{const ns={...s};newSizes.forEach(size=>{if(!(size in ns))ns[size]=0});return ns})
             }} style={{padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:active?700:400,cursor:'pointer',background:active?C.g800:C.white,color:active?'#fff':C.ink2,border:`1px solid ${active?C.g800:C.ink5}`}}>{sz}</button>
           })}
         </div>
@@ -1650,7 +1665,12 @@ function AdminInventory({products:initP}:{products:any[]}) {
           {filtered.map((p:any,i:number)=>{
             const tot=totStock(p)
             return <tr key={p.id} style={{borderBottom:`1px solid ${C.ink6}`,background:i%2===0?C.white:C.cream}}>
-              <td style={{padding:'10px 13px'}}><div style={{display:'flex',alignItems:'center',gap:7}}><span style={{fontSize:19}}>{p.emoji}</span><div><p style={{margin:'0 0 1px',fontSize:13,fontWeight:700,color:C.ink}}>{p.name}</p><p style={{margin:0,fontSize:10,color:C.ink4}}>{p.gender}</p></div></div></td>
+              <td style={{padding:'10px 13px'}}><div style={{display:'flex',alignItems:'center',gap:10}}>
+                <div style={{width:44,height:44,borderRadius:8,overflow:'hidden',background:C.cream,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  {p.image_url?<img src={p.image_url} alt={p.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:20}}>{p.emoji}</span>}
+                </div>
+                <div><p style={{margin:'0 0 1px',fontSize:13,fontWeight:700,color:C.ink}}>{p.name}</p><p style={{margin:0,fontSize:10,color:C.ink4}}>{p.gender}</p></div>
+              </div></td>
               <td style={{padding:'10px 13px',fontSize:11,fontWeight:700,color:C.ink2,fontFamily:'monospace'}}>{p.sku}</td>
               <td style={{padding:'10px 13px'}}><span style={{fontSize:11,fontWeight:600,background:C.g50,color:C.g700,padding:'2px 8px',borderRadius:4,border:`1px solid ${C.g100}`}}>{p.sport}</span></td>
               <td style={{padding:'10px 13px'}}>
