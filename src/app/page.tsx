@@ -168,7 +168,6 @@ function MiniCard({p,onView,onAdd}:{p:any,onView:()=>void,onAdd:()=>void}) {
     <div style={{padding:'14px 16px 16px',display:'flex',flexDirection:'column',gap:6,flex:1}}>
       <span style={{fontSize:10,fontWeight:700,color:C.g500,letterSpacing:'0.1em',textTransform:'uppercase'}}>{p.sport}</span>
       <p style={{margin:0,fontSize:14,fontWeight:700,color:C.ink,lineHeight:1.25}} onClick={onView}>{p.name}</p>
-      <Stars r={p.rating}/>
       <div style={{display:'flex',alignItems:'baseline',gap:7,marginTop:2}}>
         <span style={{fontSize:16,fontWeight:800,color:C.ink}}>{fmt(p.price)}</span>
         {p.original&&<span style={{fontSize:11,color:C.ink4,textDecoration:'line-through'}}>{fmt(p.original)}</span>}
@@ -464,7 +463,7 @@ function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
           <div><p style={{margin:'0 0 5px',fontSize:11,fontWeight:600,color:C.g500,letterSpacing:'0.14em',textTransform:'uppercase'}}>Best Sellers</p><h2 style={{margin:0,fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.5rem,3vw,2.2rem)',fontWeight:400,color:C.ink}}>Top Picks This Week</h2></div>
           <button onClick={()=>nav('catalog')} style={{fontSize:13,fontWeight:600,color:C.g600,background:'none',border:'none',cursor:'pointer'}}>View All →</button>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:14}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:16}}>
           {dbProducts.slice(0,24).map((p:any,i:number)=><MiniCard key={p.id+'-'+i} p={p} onView={()=>nav('detail',p)} onAdd={()=>handleAdd(p)}/>)}
         </div>
         <div style={{textAlign:'center',marginTop:24}}>
@@ -497,12 +496,13 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
       if(d.data&&d.data.length>0){
         const norm=d.data.map((p:any)=>({
           ...p,
+          sport:p.sport||'',
           original:p.original_price||p.original||null,
           reviews:p.review_count||0,
-          sports:p.tags||[],
+          sports:Array.isArray(p.tags)?p.tags:[],
           image_url:p.image_url||null,
-          sizes:p.sizes||[],
-          colors:p.colors||[],
+          sizes:Array.isArray(p.sizes)?p.sizes:[],
+          colors:Array.isArray(p.colors)?p.colors:[],
           stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))
         }))
         setAllProducts(norm)
@@ -514,17 +514,15 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
   const tog=(arr:string[],set:(a:string[])=>void,v:string)=>set(arr.includes(v)?arr.filter(x=>x!==v):[...arr,v])
   const filtered=useMemo(()=>{
     let p=[...allProducts]
-    if(sports.length) p=p.filter(x=>sports.includes(x.sport)||(x.sports&&x.sports.some((s:string)=>sports.includes(s))))
+    if(sports.length) p=p.filter(x=>sports.some(sel=>sel.toLowerCase()===( x.sport||'').toLowerCase())||(x.sports&&x.sports.some((s:string)=>sports.some(sel=>sel.toLowerCase()===s.toLowerCase()))))
     if(genders.length) p=p.filter(x=>genders.includes(x.gender))
-    if(priceR.length) p=p.filter(x=>priceR.some(r=>{const rng=PRICE_RANGES.find(pr=>pr.label===r);return rng&&x.price>=rng.min&&x.price<rng.max}))
     if(inStock) p=p.filter(x=>totStock(x)>0)
     if(sortBy==='price_asc') p.sort((a,b)=>a.price-b.price)
     else if(sortBy==='price_desc') p.sort((a,b)=>b.price-a.price)
-    else if(sortBy==='rating') p.sort((a,b)=>b.rating-a.rating)
     else if(sortBy==='bestseller') p.sort((a,b)=>b.reviews-a.reviews)
     return p
-  },[allProducts,sports,genders,priceR,inStock,sortBy])
-  const activeCount=sports.length+genders.length+priceR.length+(inStock?1:0)
+  },[allProducts,sports,genders,inStock,sortBy])
+  const activeCount=sports.length+genders.length+(inStock?1:0)
   const clearAll=()=>{setSports([]);setGenders([]);setPriceR([]);setInStock(false)}
   const Chk=({label,checked,onChange}:{label:string,checked:boolean,onChange:()=>void})=>(
     <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',marginBottom:9}}>
@@ -552,7 +550,7 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
 
     {/* FILTER TOOLBAR */}
     <div style={{background:C.white,borderBottom:`1px solid ${C.ink6}`,marginTop:56+28,position:'sticky',top:56+28,zIndex:100}}>
-      <div style={{maxWidth:1280,margin:'0 auto',padding:'12px 4vw'}}>
+      <div style={{maxWidth:1280,margin:'0 auto',padding:'12px 5vw'}}>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
           <h1 style={{margin:0,fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.1rem,4vw,1.6rem)',fontWeight:400,color:C.ink,flexShrink:0}}>Katalog</h1>
           <span style={{fontSize:11,color:C.ink4,flexShrink:0}}>{loading?"...":`(${filtered.length})`}</span>
@@ -563,7 +561,6 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
             <option value='bestseller'>Best Seller</option>
             <option value='price_asc'>Harga ↑</option>
             <option value='price_desc'>Harga ↓</option>
-            <option value='rating'>Rating</option>
           </select>
           {/* FILTER DROPDOWN */}
           <div style={{position:'relative'}}>
@@ -584,13 +581,7 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
                   {['Men','Women','Unisex'].map(g=>(<button key={g} onClick={()=>tog(genders,setGenders,g)} style={{flex:1,padding:'7px',borderRadius:6,fontSize:11,fontWeight:genders.includes(g)?700:400,cursor:'pointer',background:genders.includes(g)?C.ink:C.cream,color:genders.includes(g)?'#fff':C.ink2,border:`1px solid ${genders.includes(g)?C.ink:C.ink5}`,transition:'all 0.12s'}}>{g}</button>))}
                 </div>
               </div>
-              <div style={{marginBottom:14}}>
-                <p style={{margin:'0 0 8px',fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.08em',textTransform:'uppercase'}}>Harga</p>
-                <select value={priceR[0]||''} onChange={e=>{if(e.target.value)setPriceR([e.target.value]);else setPriceR([])}} style={{width:'100%',padding:'8px 10px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',background:C.white,cursor:'pointer',color:C.ink}}>
-                  <option value=''>Semua Harga</option>
-                  {PRICE_RANGES.map(r=><option key={r.label} value={r.label}>{r.label}</option>)}
-                </select>
-              </div>
+
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <label style={{display:'flex',alignItems:'center',gap:7,cursor:'pointer',fontSize:12,color:C.ink2}}>
                   <div onClick={()=>setInStock(v=>!v)} style={{width:34,height:18,borderRadius:9,background:inStock?C.g600:C.ink5,position:'relative',transition:'background 0.2s',cursor:'pointer',flexShrink:0}}>
@@ -610,10 +601,10 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
     {showFilters&&<div style={{position:'fixed',inset:0,zIndex:150}} onClick={()=>setShowFilters(false)}/>}
 
     {/* PRODUCTS GRID — 2 kolom di mobile */}
-    <div style={{maxWidth:1280,margin:'0 auto',padding:'14px 3vw 60px'}}>
+    <div style={{maxWidth:1280,margin:'0 auto',padding:'14px 5vw 60px'}}>
       {filtered.length===0
         ?<div style={{textAlign:'center',padding:'52px 0',color:C.ink4}}><div style={{fontSize:36,marginBottom:10}}>🔍</div><p style={{fontSize:14,fontWeight:600,color:C.ink2,margin:'0 0 14px'}}>Tidak ada produk</p><button onClick={clearAll} style={{background:C.g800,color:'#fff',border:'none',borderRadius:9,padding:'10px 22px',fontSize:13,fontWeight:600,cursor:'pointer'}}>Reset Filter</button></div>
-        :<div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'10px'}}>
+        :<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:16}}>
           {filtered.map(p=><MiniCard key={p.id} p={p} onView={()=>nav('detail',p)} onAdd={()=>{addToCart({...p,qty:1,size:p.sizes[0]});setToast(p.name)}}/>)}
         </div>
       }
