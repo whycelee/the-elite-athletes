@@ -194,7 +194,7 @@ function StoreNavbar({nav,cartCount,onCartClick,scrolled}:{nav:(p:string,d?:any)
       </button>
       {/* DESKTOP MENU */}
       <div className="desktop-only" style={{display:'flex',gap:28}}>
-        {[['Collection','catalog'],['Sports','catalog'],['Our Athletes','athletes'],['About','about']].map(([l,p])=><button key={l} onClick={()=>nav(p)} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:500,color:C.ink2,padding:0}}>{l}</button>)}
+        {[['Home','home'],['Catalog','catalog'],['Our Athletes','athletes'],['About','about']].map(([l,p])=><button key={l} onClick={()=>nav(p)} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:500,color:C.ink2,padding:0}}>{l}</button>)}
       </div>
       {/* RIGHT ICONS */}
       <div style={{display:'flex',alignItems:'center',gap:6}}>
@@ -213,7 +213,7 @@ function StoreNavbar({nav,cartCount,onCartClick,scrolled}:{nav:(p:string,d?:any)
     </div>
     {/* MOBILE DROPDOWN MENU */}
     {mobileMenu&&<div style={{background:'rgba(250,248,244,0.98)',borderTop:`1px solid ${C.ink6}`,padding:'16px 5vw 20px',animation:'slideDown 0.2s ease'}}>
-      {[['🛍️','Collection','catalog'],['⚽','Sports','catalog'],['🏅','Our Athletes','athletes'],['ℹ️','About','about']].map(([ic,label,page])=>(
+      {[['🏠','Home','home'],['🛍️','Catalog','catalog'],['🏅','Our Athletes','athletes'],['ℹ️','About','about']].map(([ic,label,page])=>(
         <button key={label} onClick={()=>{nav(page);setMobileMenu(false)}} style={{width:'100%',display:'flex',alignItems:'center',gap:12,padding:'13px 0',background:'none',border:'none',cursor:'pointer',borderBottom:`1px solid ${C.ink6}`,fontSize:15,fontWeight:500,color:C.ink2}}>
           <span style={{fontSize:18}}>{ic}</span>{label}
         </button>
@@ -439,20 +439,21 @@ function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
         </div>
       </div>
     </section>
-    {/* FEATURED PRODUCTS */}
+    {/* FEATURED PRODUCTS - show more */}
     <section style={{padding:'52px 5vw',background:C.cream}}>
       <div style={{maxWidth:1280,margin:'0 auto'}}>
         <div style={{marginBottom:28,display:'flex',justifyContent:'space-between',alignItems:'flex-end',flexWrap:'wrap',gap:14}}>
           <div><p style={{margin:'0 0 5px',fontSize:11,fontWeight:600,color:C.g500,letterSpacing:'0.14em',textTransform:'uppercase'}}>Best Sellers</p><h2 style={{margin:0,fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.5rem,3vw,2.2rem)',fontWeight:400,color:C.ink}}>Top Picks This Week</h2></div>
           <button onClick={()=>nav('catalog')} style={{fontSize:13,fontWeight:600,color:C.g600,background:'none',border:'none',cursor:'pointer'}}>View All →</button>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:18}}>
-          {ALL_PRODUCTS.slice(0,4).map(p=><MiniCard key={p.id} p={p} onView={()=>nav('detail',p)} onAdd={()=>handleAdd(p)}/>)}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:14}}>
+          {[...ALL_PRODUCTS,...ALL_PRODUCTS,...ALL_PRODUCTS].slice(0,24).map((p,i)=><MiniCard key={p.id+'-'+i} p={p} onView={()=>nav('detail',p)} onAdd={()=>handleAdd(p)}/>)}
+        </div>
+        <div style={{textAlign:'center',marginTop:24}}>
+          <button onClick={()=>nav('catalog')} style={{background:C.g800,color:'#fff',border:'none',borderRadius:10,padding:'12px 32px',fontSize:14,fontWeight:600,cursor:'pointer'}}>Lihat Semua Produk →</button>
         </div>
       </div>
     </section>
-    {/* OUR ATHLETES - replaces testimonials & brand strip */}
-    <LandingAthletes nav={nav}/>
     {/* FOOTER */}
     <footer style={{background:C.g900,borderTop:'1px solid rgba(255,255,255,0.06)',padding:'26px 5vw',textAlign:'center'}}>
       <p style={{margin:0,fontSize:12,color:C.g600}}>© 2025 The Elite Athletes. Made with 💚 in Indonesia.</p>
@@ -1332,6 +1333,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
   const [newProd,setNewProd]=useState({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',original:'',emoji:'👕',sizes:'S,M,L,XL',colors:'Black,White',desc:'',extraSports:'',hasSizes:true,hasColors:true})
   const [imageFile,setImageFile]=useState<File|null>(null)
   const [imagePreview,setImagePreview]=useState<string|null>(null)
+  const [newProdImgs,setNewProdImgs]=useState<(string|null)[]>([null,null,null,null,null])
   const [uploadingImg,setUploadingImg]=useState(false)
   const [previewImg,setPreviewImg]=useState<string|null>(null)
   const sports=['all',...new Set(products.map((p:any)=>p.sport))]
@@ -1401,6 +1403,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
         setNewProd({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',original:'',emoji:'👕',sizes:'S,M,L,XL',colors:'Black,White',desc:'',extraSports:'',hasSizes:true,hasColors:true})
         setImageFile(null)
         setImagePreview(null)
+        setNewProdImgs([null,null,null,null,null])
         alert('Produk berhasil ditambahkan!')
       } else {
         alert('Gagal tambah produk: '+(d.error||'Unknown error'))
@@ -1478,32 +1481,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
             </div>
           )}
 
-          {/* IMAGE UPLOAD */}
-          <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-            <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:8}}>Foto Produk</label>
-            <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
-              {imagePreview
-                ?<div style={{position:'relative',flexShrink:0}}>
-                  <img src={imagePreview} alt="preview" style={{width:80,height:80,objectFit:'cover',borderRadius:8,border:`1px solid ${C.ink5}`}}/>
-                  <button onClick={()=>{setImageFile(null);setImagePreview(null)}} style={{position:'absolute',top:-6,right:-6,width:18,height:18,borderRadius:'50%',background:C.red,color:'#fff',border:'none',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
-                </div>
-                :<div style={{width:80,height:80,background:C.white,border:`2px dashed ${C.ink5}`,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:24}}>📷</div>
-              }
-              <div style={{flex:1}}>
-                <input type="file" accept="image/*" id="img-upload" style={{display:'none'}} onChange={e=>{
-                  const file=e.target.files?.[0]
-                  if(file){
-                    setImageFile(file)
-                    const reader=new FileReader()
-                    reader.onload=ev=>setImagePreview(ev.target?.result as string)
-                    reader.readAsDataURL(file)
-                  }
-                }}/>
-                <label htmlFor="img-upload" style={{display:'block',padding:'8px 14px',background:C.g800,color:'#fff',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',textAlign:'center',marginBottom:6}}>Pilih Foto</label>
-                <p style={{margin:0,fontSize:10,color:C.ink4}}>JPG, PNG, WEBP. Maks 5MB.</p>
-              </div>
-            </div>
-          </div>
+
 
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
             <div style={{display:'flex',flexDirection:'column',gap:4}}>
