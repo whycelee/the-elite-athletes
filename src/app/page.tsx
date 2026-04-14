@@ -59,8 +59,7 @@ const SPORTS_LIST = ['Tennis','Badminton','Padel','Hyrox','Gym','Running','Golf'
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const MONTH_ID: Record<string,string> = {Jan:'Januari',Feb:'Februari',Mar:'Maret',Apr:'April',May:'Mei',Jun:'Juni',Jul:'Juli',Aug:'Agustus',Sep:'September',Oct:'Oktober',Nov:'November',Dec:'Desember'}
 const PPN = 0.11
-// ✏️ EDIT TEKS ANNOUNCEMENT BAR DI SINI:
-let ANNOUNCEMENT_TEXT = 'FREE SHIPPING di atas Rp 500.000 · Kode <strong style="color:#86BC91">ELITE20</strong> diskon 20%'
+
 const SUPERIOR_PIN = '082505'
 const SHIPPING_OPTIONS = [
   {id:'regular',label:'Regular Delivery',desc:'3–5 hari kerja',price:25000,icon:'📦'},
@@ -185,7 +184,7 @@ function StoreNavbar({nav,cartCount,onCartClick,scrolled}:{nav:(p:string,d?:any)
   const [mobileMenu,setMobileMenu]=useState(false)
   return <nav style={{position:'fixed',top:0,left:0,right:0,zIndex:500,background:scrolled||mobileMenu?'rgba(250,248,244,0.97)':' transparent',backdropFilter:scrolled||mobileMenu?'blur(12px)':'none',borderBottom:scrolled||mobileMenu?`1px solid ${C.ink6}`:'none',transition:'all 0.3s'}}>
     <div style={{background:C.g800,padding:'6px 5vw',textAlign:'center'}}>
-      <span style={{fontSize:10,color:C.g100,fontWeight:500}} dangerouslySetInnerHTML={{__html:ANNOUNCEMENT_TEXT}}/>
+      <span style={{fontSize:10,color:C.g100,fontWeight:500}} dangerouslySetInnerHTML={{__html:SITE_CONTENT.announcement}}/>
     </div>
     <div style={{maxWidth:1280,margin:'0 auto',height:56,padding:'0 5vw',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
       {/* LOGO */}
@@ -195,7 +194,7 @@ function StoreNavbar({nav,cartCount,onCartClick,scrolled}:{nav:(p:string,d?:any)
       </button>
       {/* DESKTOP MENU */}
       <div className="desktop-only" style={{display:'flex',gap:28}}>
-        {[['Collection','catalog'],['Sports','catalog'],['Our Athletes','athletes'],['About','home']].map(([l,p])=><button key={l} onClick={()=>nav(p)} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:500,color:C.ink2,padding:0}}>{l}</button>)}
+        {[['Collection','catalog'],['Sports','catalog'],['Our Athletes','athletes'],['About','about']].map(([l,p])=><button key={l} onClick={()=>nav(p)} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:500,color:C.ink2,padding:0}}>{l}</button>)}
       </div>
       {/* RIGHT ICONS */}
       <div style={{display:'flex',alignItems:'center',gap:6}}>
@@ -214,7 +213,7 @@ function StoreNavbar({nav,cartCount,onCartClick,scrolled}:{nav:(p:string,d?:any)
     </div>
     {/* MOBILE DROPDOWN MENU */}
     {mobileMenu&&<div style={{background:'rgba(250,248,244,0.98)',borderTop:`1px solid ${C.ink6}`,padding:'16px 5vw 20px',animation:'slideDown 0.2s ease'}}>
-      {[['🛍️','Collection','catalog'],['⚽','Sports','catalog'],['🏅','Our Athletes','athletes'],['ℹ️','About','home']].map(([ic,label,page])=>(
+      {[['🛍️','Collection','catalog'],['⚽','Sports','catalog'],['🏅','Our Athletes','athletes'],['ℹ️','About','about']].map(([ic,label,page])=>(
         <button key={label} onClick={()=>{nav(page);setMobileMenu(false)}} style={{width:'100%',display:'flex',alignItems:'center',gap:12,padding:'13px 0',background:'none',border:'none',cursor:'pointer',borderBottom:`1px solid ${C.ink6}`,fontSize:15,fontWeight:500,color:C.ink2}}>
           <span style={{fontSize:18}}>{ic}</span>{label}
         </button>
@@ -309,6 +308,98 @@ function HeroCarousel({nav,heroSlide,setHeroSlide,handleAdd}:{nav:(p:string,d?:a
   )
 }
 
+// ── LANDING ATHLETES SECTION (editable via Admin > Content) ──
+const DEFAULT_ATHLETES = [
+  {id:1,name:'Rina Susanti',sport:'Tennis',quote:'The Elite Athletes gear gives me confidence to perform at my best every match.',img:null as string|null,initials:'RS'},
+  {id:2,name:'Bagas Wicaksono',sport:'Hyrox',quote:'Training gets harder every day, but with the right gear I push through every WOD.',img:null as string|null,initials:'BW'},
+  {id:3,name:'Citra Andriani',sport:'Yoga',quote:'Comfort and style combined — exactly what I need for every practice session.',img:null as string|null,initials:'CA'},
+]
+// Global editable content (updated from Admin Panel)
+const SITE_CONTENT = {
+  announcement: 'FREE SHIPPING di atas Rp 500.000 · Kode <strong style="color:#86BC91">ELITE20</strong> diskon 20%',
+  athletes: DEFAULT_ATHLETES,
+  aboutTitle: 'The Elite Athletes',
+  aboutSubtitle: 'Born from passion, built for performance.',
+  aboutDesc: 'The Elite Athletes adalah brand sport wear premium Indonesia yang dirancang untuk para atlet modern — dari lapangan tenis hingga gym, dari lintasan lari hingga studio yoga. Setiap produk kami dibuat dengan teknologi fabric terkini, memastikan performa optimal dan kenyamanan maksimal dalam setiap gerakan.',
+  aboutMission: 'Misi kami sederhana: menghadirkan gear berkualitas dunia untuk atlet Indonesia.',
+  aboutValues: [
+    {icon:'🏆', title:'Performance First', desc:'Setiap desain dioptimalkan untuk mendukung performa terbaik kamu'},
+    {icon:'🌿', title:'Sustainable', desc:'Dibuat dengan bahan ramah lingkungan tanpa mengorbankan kualitas'},
+    {icon:'💚', title:'Made for Indonesia', desc:'Dirancang memahami iklim dan gaya hidup aktif orang Indonesia'},
+  ],
+}
+
+function LandingAthletes({nav}:{nav:(p:string,d?:any)=>void}) {
+  return (
+    <section style={{padding:'52px 5vw',background:C.white}}>
+      <div style={{maxWidth:1280,margin:'0 auto'}}>
+        <div style={{marginBottom:36,display:'flex',justifyContent:'space-between',alignItems:'flex-end',flexWrap:'wrap',gap:14}}>
+          <div>
+            <p style={{margin:'0 0 6px',fontSize:11,fontWeight:600,color:C.g500,letterSpacing:'0.14em',textTransform:'uppercase'}}>Our Athletes</p>
+            <h2 style={{margin:0,fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.5rem,3vw,2.2rem)',fontWeight:400,color:C.ink}}>Worn & Trusted by Athletes</h2>
+          </div>
+          <button onClick={()=>nav('athletes')} style={{fontSize:13,fontWeight:600,color:C.g600,background:'none',border:'none',cursor:'pointer'}}>Meet All Athletes →</button>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:20}}>
+          {SITE_CONTENT.athletes.map(a=>(
+            <div key={a.id} style={{background:C.cream,border:`1px solid ${C.ink6}`,borderRadius:16,padding:'22px',display:'flex',flexDirection:'column',gap:14}}>
+              <div style={{display:'flex',gap:3}}>{[1,2,3,4,5].map(i=><svg key={i} width="12" height="12" viewBox="0 0 12 12"><polygon points="6,1 7.5,4.5 11,5 8.5,7.5 9.2,11 6,9.2 2.8,11 3.5,7.5 1,5 4.5,4.5" fill={C.gold2}/></svg>)}</div>
+              <p style={{margin:0,fontSize:14,color:C.ink2,lineHeight:1.75,fontStyle:'italic',flex:1}}>"{a.quote}"</p>
+              <div style={{display:'flex',alignItems:'center',gap:11}}>
+                {a.img
+                  ?<img src={a.img} alt={a.name} style={{width:42,height:42,borderRadius:'50%',objectFit:'cover',border:`2px solid ${C.g200}`}}/>
+                  :<div style={{width:42,height:42,borderRadius:'50%',background:C.g100,border:`2px solid ${C.g200}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:C.g700,flexShrink:0}}>{a.initials}</div>
+                }
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.ink}}>{a.name}</div>
+                  <div style={{fontSize:11,color:C.g500,fontWeight:500}}>{a.sport} Athlete</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── ABOUT PAGE ────────────────────────────────────────────────
+function AboutPage({nav,cartCount}:{nav:(p:string,d?:any)=>void,cartCount:number}) {
+  return <div style={{background:C.cream,minHeight:'100vh'}}>
+    <StoreNavbar nav={nav} cartCount={cartCount} onCartClick={()=>nav('checkout')} scrolled={true}/>
+    {/* HERO */}
+    <div style={{background:C.g800,marginTop:56+28,padding:'60px 5vw 52px'}}>
+      <div style={{maxWidth:900,margin:'0 auto',textAlign:'center'}}>
+        <p style={{margin:'0 0 10px',fontSize:11,fontWeight:600,color:C.g300,letterSpacing:'0.18em',textTransform:'uppercase'}}>Our Story</p>
+        <h1 style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(2rem,5vw,3.5rem)',fontWeight:400,color:'#fff',margin:'0 0 20px',lineHeight:1.1}}>{SITE_CONTENT.aboutTitle}</h1>
+        <p style={{fontSize:16,color:C.g300,margin:0,lineHeight:1.8,fontStyle:'italic'}}>{SITE_CONTENT.aboutSubtitle}</p>
+      </div>
+    </div>
+    {/* MAIN CONTENT */}
+    <div style={{maxWidth:900,margin:'0 auto',padding:'52px 5vw'}}>
+      <p style={{fontSize:16,color:C.ink2,lineHeight:1.9,marginBottom:48,textAlign:'center'}}>{SITE_CONTENT.aboutDesc}</p>
+      {/* VALUES */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))',gap:20,marginBottom:48}}>
+        {SITE_CONTENT.aboutValues.map(v=>(
+          <div key={v.title} style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:16,padding:'24px',textAlign:'center'}}>
+            <div style={{fontSize:36,marginBottom:12}}>{v.icon}</div>
+            <h3 style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:18,fontWeight:400,color:C.ink,margin:'0 0 10px'}}>{v.title}</h3>
+            <p style={{margin:0,fontSize:13,color:C.ink3,lineHeight:1.7}}>{v.desc}</p>
+          </div>
+        ))}
+      </div>
+      {/* MISSION */}
+      <div style={{background:C.g800,borderRadius:20,padding:'36px',textAlign:'center'}}>
+        <p style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.2rem,3vw,1.8rem)',fontWeight:400,color:'#fff',margin:'0 0 20px',lineHeight:1.4,fontStyle:'italic'}}>"{SITE_CONTENT.aboutMission}"</p>
+        <button onClick={()=>nav('catalog')} style={{background:C.gold2,color:C.g900,border:'none',borderRadius:10,padding:'12px 28px',fontSize:14,fontWeight:700,cursor:'pointer'}}>Shop the Collection</button>
+      </div>
+    </div>
+    <footer style={{background:C.g900,borderTop:'1px solid rgba(255,255,255,0.06)',padding:'26px 5vw',textAlign:'center'}}>
+      <p style={{margin:0,fontSize:12,color:C.g600}}>© 2025 The Elite Athletes. Made with 💚 in Indonesia.</p>
+    </footer>
+  </div>
+}
+
 function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addToCart:(item:any)=>void,cartCount:number}) {
   const [scrolled,setScrolled]=useState(false)
   const [heroSlide,setHeroSlide]=useState(0)
@@ -329,46 +420,39 @@ function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
     {/* HERO CAROUSEL */}
     {/* HERO CAROUSEL */}
     <HeroCarousel nav={nav} heroSlide={heroSlide} setHeroSlide={setHeroSlide} handleAdd={handleAdd}/>
-    {/* CATEGORIES */}
-    <section style={{padding:'68px 5vw',background:C.white}}>
+    {/* SPORT CATEGORIES */}
+    <section style={{padding:'52px 5vw',background:C.white}}>
       <div style={{maxWidth:1280,margin:'0 auto'}}>
-        <div style={{marginBottom:36,display:'flex',justifyContent:'space-between',alignItems:'flex-end',flexWrap:'wrap',gap:14}}>
+        <div style={{marginBottom:28,display:'flex',justifyContent:'space-between',alignItems:'flex-end',flexWrap:'wrap',gap:14}}>
           <div><p style={{margin:'0 0 6px',fontSize:11,fontWeight:600,color:C.g500,letterSpacing:'0.14em',textTransform:'uppercase'}}>Browse by Sport</p><h2 style={{margin:0,fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.5rem,3vw,2.2rem)',fontWeight:400,color:C.ink}}>Your Sport, Your Gear.</h2></div>
           <button onClick={()=>nav('catalog')} style={{fontSize:13,fontWeight:600,color:C.g600,background:'none',border:'none',cursor:'pointer'}}>All Categories →</button>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))',gap:10}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:10}}>
           {cats.map(cat=>(
             <button key={cat.label} onClick={()=>nav('catalog')} style={{background:C.cream,border:`1px solid ${C.ink6}`,borderRadius:12,padding:'14px 8px 12px',cursor:'pointer',textAlign:'center',transition:'all 0.2s'}}
               onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.borderColor=C.g400;(e.currentTarget as HTMLElement).style.background=C.g50}}
               onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.borderColor=C.ink6;(e.currentTarget as HTMLElement).style.background=C.cream}}>
-              <div style={{fontSize:24,marginBottom:5}}>{cat.icon}</div>
+              <div style={{fontSize:22,marginBottom:5}}>{cat.icon}</div>
               <div style={{fontSize:11,fontWeight:600,color:C.ink2}}>{cat.label}</div>
-              <div style={{fontSize:9,color:C.ink4,marginTop:1}}>{cat.count} items</div>
             </button>
           ))}
         </div>
       </div>
     </section>
     {/* FEATURED PRODUCTS */}
-    <section style={{padding:'68px 5vw',background:C.cream}}>
+    <section style={{padding:'52px 5vw',background:C.cream}}>
       <div style={{maxWidth:1280,margin:'0 auto'}}>
-        <div style={{marginBottom:32,display:'flex',justifyContent:'space-between',alignItems:'flex-end',flexWrap:'wrap',gap:14}}>
+        <div style={{marginBottom:28,display:'flex',justifyContent:'space-between',alignItems:'flex-end',flexWrap:'wrap',gap:14}}>
           <div><p style={{margin:'0 0 5px',fontSize:11,fontWeight:600,color:C.g500,letterSpacing:'0.14em',textTransform:'uppercase'}}>Best Sellers</p><h2 style={{margin:0,fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.5rem,3vw,2.2rem)',fontWeight:400,color:C.ink}}>Top Picks This Week</h2></div>
           <button onClick={()=>nav('catalog')} style={{fontSize:13,fontWeight:600,color:C.g600,background:'none',border:'none',cursor:'pointer'}}>View All →</button>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:14}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:18}}>
           {ALL_PRODUCTS.slice(0,4).map(p=><MiniCard key={p.id} p={p} onView={()=>nav('detail',p)} onAdd={()=>handleAdd(p)}/>)}
         </div>
       </div>
     </section>
-    {/* BRAND STRIP */}
-    <section style={{background:C.g800,padding:'26px 5vw'}}>
-      <div style={{maxWidth:1280,margin:'0 auto',display:'flex',justifyContent:'space-around',flexWrap:'wrap',gap:18}}>
-        {[['⚡','Performance Tech','Advanced fabrics'],['🌿','Sustainably Made','Eco-conscious'],['📦','Fast Delivery','2-hour same-day'],['↩️','30-Day Returns','No questions']].map(([ic,t,s])=>(
-          <div key={t} style={{display:'flex',alignItems:'center',gap:12}}><span style={{fontSize:20}}>{ic}</span><div><div style={{fontSize:13,fontWeight:700,color:C.g100}}>{t}</div><div style={{fontSize:11,color:C.g300}}>{s}</div></div></div>
-        ))}
-      </div>
-    </section>
+    {/* OUR ATHLETES - replaces testimonials & brand strip */}
+    <LandingAthletes nav={nav}/>
     {/* FOOTER */}
     <footer style={{background:C.g900,borderTop:'1px solid rgba(255,255,255,0.06)',padding:'26px 5vw',textAlign:'center'}}>
       <p style={{margin:0,fontSize:12,color:C.g600}}>© 2025 The Elite Athletes. Made with 💚 in Indonesia.</p>
@@ -1795,78 +1879,69 @@ function AdminFinancial() {
 // ADMIN: CONTENT MANAGEMENT
 // ═══════════════════════════════════════════════════════════
 function AdminContent() {
-  const SLIDE_DEFAULTS = [
-    {id:1,label:'New Season 2025',title:'Gear Built for',titleItalic:'Elite Athletes',subtitle:'Premium sport wear untuk Tennis, Badminton, Padel, Hyrox, Running, Golf, dan lebih.',cta:'Shop Collection',emoji:'👟',image:''},
-    {id:2,label:'New Arrival',title:'Court Precision',titleItalic:'Polo Series',subtitle:'Engineered for match-day performance. Moisture-wicking, UV Protection.',cta:'Lihat Koleksi',emoji:'🎾',image:''},
-    {id:3,label:'Best Seller',title:'Run Further,',titleItalic:'Run Faster',subtitle:'AeroStride collection — designed for every stride. 4-way stretch, reflective details.',cta:'Shop Running',emoji:'🏃',image:''},
-    {id:4,label:'New Sport',title:'Badminton',titleItalic:'Performance Wear',subtitle:'Lightweight, breathable, built for the court. Move freely, play harder.',cta:'Explore Now',emoji:'🏸',image:''},
-    {id:5,label:'Limited Edition',title:'Hyrox Ready',titleItalic:'Collection',subtitle:'Built for the toughest workouts. Anti-odor, seamless construction.',cta:'Shop Hyrox',emoji:'🏋️',image:''},
-  ]
-
-  const [slides,setSlides]=useState(SLIDE_DEFAULTS)
+  const [tab,setTab]=useState('announcement')
+  const [announcement,setAnnouncement]=useState(SITE_CONTENT.announcement.replace(/<[^>]+>/g,'').replace(/&#39;/g,"'"))
+  const [annSaved,setAnnSaved]=useState(false)
+  const [slides,setSlides]=useState(HERO_SLIDES.map(s=>({...s})))
   const [activeSlide,setActiveSlide]=useState(0)
-  const [announcement,setAnnouncement]=useState('FREE SHIPPING di atas Rp 500.000 · Kode ELITE20 diskon 20%')
-  const [announcementSaved,setAnnouncementSaved]=useState(false)
   const [uploadingSlide,setUploadingSlide]=useState(false)
+  const [athletes,setAthletes]=useState(SITE_CONTENT.athletes.map(a=>({...a})))
+  const [about,setAbout]=useState({title:SITE_CONTENT.aboutTitle,subtitle:SITE_CONTENT.aboutSubtitle,desc:SITE_CONTENT.aboutDesc,mission:SITE_CONTENT.aboutMission})
   const [saved,setSaved]=useState(false)
+  const [uploadingAth,setUploadingAth]=useState<number|null>(null)
 
-  async function uploadBanner(file:File, slideIdx:number){
-    setUploadingSlide(true)
+  async function uploadFile(file:File, path:string):Promise<string|null>{
     try{
-      const ext=file.name.split('.').pop()
-      const fileName=`banner-${slideIdx+1}-${Date.now()}.${ext}`
-      const { createClient } = await import('@supabase/supabase-js')
-      const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-      const { error } = await sb.storage.from('product-images').upload(`banners/${fileName}`, file, {upsert:true})
-      if(error) throw error
-      const { data } = sb.storage.from('product-images').getPublicUrl(`banners/${fileName}`)
-      setSlides(prev=>prev.map((s,i)=>i===slideIdx?{...s,image:data.publicUrl}:s))
-      setSaved(false)
-    }catch(e){alert('Upload gagal: '+e)}
-    finally{setUploadingSlide(false)}
+      const {createClient}=await import('@supabase/supabase-js')
+      const sb=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+      const {error}=await sb.storage.from('product-images').upload(path,file,{upsert:true})
+      if(error)throw error
+      const {data}=sb.storage.from('product-images').getPublicUrl(path)
+      return data.publicUrl
+    }catch(e){alert('Upload gagal: '+e);return null}
   }
 
-  function saveAnnouncement(){
-    // Update global ANNOUNCEMENT_TEXT
-    ;(window as any).ANNOUNCEMENT_TEXT_LIVE = announcement
-    // Force update announcement bar
-    const spans = document.querySelectorAll('[data-announcement]')
-    spans.forEach(s => {s.innerHTML = announcement})
-    setAnnouncementSaved(true)
-    setTimeout(()=>setAnnouncementSaved(false), 3000)
+  function saveAnn(){
+    SITE_CONTENT.announcement=announcement
+    setAnnSaved(true);setTimeout(()=>setAnnSaved(false),2500)
+  }
+  function saveAbout(){
+    Object.assign(SITE_CONTENT,{aboutTitle:about.title,aboutSubtitle:about.subtitle,aboutDesc:about.desc,aboutMission:about.mission})
+    setSaved(true);setTimeout(()=>setSaved(false),2500)
+  }
+  function saveAthletes(){
+    SITE_CONTENT.athletes=[...athletes]
+    setSaved(true);setTimeout(()=>setSaved(false),2500)
   }
 
-  const slide = slides[activeSlide]
+  const TABS=[['announcement','📢 Announcement'],['carousel','🖼️ Hero Banner'],['athletes','🏅 Our Athletes'],['about','📖 About Us']]
 
-  return <div style={{display:'flex',flexDirection:'column',gap:20}}>
-    {/* ANNOUNCEMENT BAR EDITOR */}
-    <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:14,padding:'20px 22px'}}>
-      <h3 style={{margin:'0 0 4px',fontSize:15,fontWeight:700,color:C.ink}}>📢 Announcement Bar</h3>
-      <p style={{margin:'0 0 14px',fontSize:12,color:C.ink4}}>Teks yang tampil di bar hijau paling atas website</p>
-      <div style={{background:C.g800,borderRadius:9,padding:'10px 16px',marginBottom:14,textAlign:'center'}}>
-        <span style={{fontSize:12,color:C.g100}}>{announcement||'(kosong)'}</span>
-      </div>
-      <textarea
-        value={announcement}
-        onChange={e=>setAnnouncement(e.target.value)}
-        rows={2}
-        style={{width:'100%',padding:'10px 12px',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink,resize:'vertical',boxSizing:'border-box'}}
-        placeholder="FREE SHIPPING di atas Rp 500.000 · Kode ELITE20 diskon 20%"
-      />
-      <div style={{display:'flex',alignItems:'center',gap:10,marginTop:10}}>
-        <button onClick={saveAnnouncement} style={{padding:'9px 20px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>
-          {announcementSaved?'✓ Tersimpan!':'Simpan'}
-        </button>
-        <p style={{margin:0,fontSize:11,color:C.ink4}}>Perubahan langsung terlihat. Untuk permanen, edit ANNOUNCEMENT_TEXT di kode.</p>
-      </div>
+  return <div style={{display:'flex',flexDirection:'column',gap:0}}>
+    {/* TAB BAR */}
+    <div style={{display:'flex',gap:6,marginBottom:20,flexWrap:'wrap'}}>
+      {TABS.map(([id,label])=>(
+        <button key={id} onClick={()=>setTab(id)} style={{padding:'8px 16px',borderRadius:9,fontSize:12,fontWeight:tab===id?700:500,cursor:'pointer',background:tab===id?C.g800:C.white,color:tab===id?'#fff':C.ink2,border:`1px solid ${tab===id?C.g800:C.ink5}`}}>{label}</button>
+      ))}
     </div>
 
-    {/* BANNER CAROUSEL EDITOR */}
-    <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:14,padding:'20px 22px'}}>
-      <h3 style={{margin:'0 0 4px',fontSize:15,fontWeight:700,color:C.ink}}>🖼️ Hero Banner Carousel</h3>
-      <p style={{margin:'0 0 16px',fontSize:12,color:C.ink4}}>Edit teks dan upload foto untuk setiap slide banner</p>
+    {/* ANNOUNCEMENT */}
+    {tab==='announcement'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:14,padding:'22px'}}>
+      <h3 style={{margin:'0 0 4px',fontSize:15,fontWeight:700,color:C.ink}}>📢 Announcement Bar</h3>
+      <p style={{margin:'0 0 14px',fontSize:12,color:C.ink4}}>Teks hijau di paling atas website</p>
+      <div style={{background:C.g800,borderRadius:9,padding:'10px 16px',marginBottom:14,textAlign:'center'}}>
+        <span style={{fontSize:12,color:C.g100}}>{announcement}</span>
+      </div>
+      <textarea value={announcement} onChange={e=>setAnnouncement(e.target.value)} rows={3} style={{width:'100%',padding:'10px 12px',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink,resize:'vertical',boxSizing:'border-box' as any}} placeholder="FREE SHIPPING di atas Rp 500.000..."/>
+      <div style={{display:'flex',gap:10,alignItems:'center',marginTop:10}}>
+        <button onClick={saveAnn} style={{padding:'9px 20px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>{annSaved?'✓ Tersimpan!':'Simpan'}</button>
+        <span style={{fontSize:11,color:C.ink4}}>Perubahan langsung aktif di sesi ini</span>
+      </div>
+    </div>}
 
-      {/* SLIDE TABS */}
+    {/* HERO CAROUSEL */}
+    {tab==='carousel'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:14,padding:'22px'}}>
+      <h3 style={{margin:'0 0 4px',fontSize:15,fontWeight:700,color:C.ink}}>🖼️ Hero Banner (5 Slide)</h3>
+      <p style={{margin:'0 0 16px',fontSize:12,color:C.ink4}}>Upload foto dan edit teks untuk setiap slide</p>
       <div style={{display:'flex',gap:7,marginBottom:18,flexWrap:'wrap'}}>
         {slides.map((s,i)=>(
           <button key={i} onClick={()=>setActiveSlide(i)} style={{padding:'7px 14px',borderRadius:8,fontSize:12,fontWeight:activeSlide===i?700:500,cursor:'pointer',background:activeSlide===i?C.g800:C.cream,color:activeSlide===i?'#fff':C.ink2,border:`1px solid ${activeSlide===i?C.g800:C.ink5}`}}>
@@ -1874,70 +1949,102 @@ function AdminContent() {
           </button>
         ))}
       </div>
-
-      {/* SLIDE EDITOR */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
-        {/* LEFT: FIELDS */}
-        <div style={{display:'flex',flexDirection:'column',gap:11}}>
-          {[
-            {label:'Label (kecil di atas)',key:'label',placeholder:'New Season 2025'},
-            {label:'Judul Baris 1',key:'title',placeholder:'Gear Built for'},
-            {label:'Judul Italic (hijau)',key:'titleItalic',placeholder:'Elite Athletes'},
-            {label:'Subjudul',key:'subtitle',placeholder:'Premium sport wear...'},
-            {label:'Teks Tombol CTA',key:'cta',placeholder:'Shop Collection'},
-            {label:'Emoji (jika tidak ada foto)',key:'emoji',placeholder:'👟'},
-          ].map(f=>(
-            <div key={f.key}>
-              <label style={{fontSize:11,fontWeight:600,color:C.ink4,display:'block',marginBottom:3}}>{f.label}</label>
-              <input value={(slide as any)[f.key]} onChange={e=>setSlides(prev=>prev.map((s,i)=>i===activeSlide?{...s,[f.key]:e.target.value}:s))} placeholder={f.placeholder} style={{width:'100%',padding:'8px 11px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box'}}/>
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          {(['label','title','titleItalic','subtitle','cta','emoji'] as const).map(k=>(
+            <div key={k}>
+              <label style={{fontSize:11,fontWeight:600,color:C.ink4,display:'block',marginBottom:3}}>{k==='label'?'Label kecil':k==='titleItalic'?'Judul italic (hijau)':k==='cta'?'Teks tombol':k==='emoji'?'Emoji (jika no foto)':k.charAt(0).toUpperCase()+k.slice(1)}</label>
+              <input value={(slides[activeSlide] as any)[k]||''} onChange={e=>setSlides(prev=>prev.map((s,i)=>i===activeSlide?{...s,[k]:e.target.value}:s))} style={{width:'100%',padding:'8px 10px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
             </div>
           ))}
         </div>
-
-        {/* RIGHT: IMAGE UPLOAD */}
-        <div style={{display:'flex',flexDirection:'column',gap:12}}>
-          <label style={{fontSize:11,fontWeight:600,color:C.ink4}}>Foto Banner</label>
-          <div style={{height:180,background:C.g800,borderRadius:12,overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
-            {slide.image
-              ?<img src={slide.image} alt="banner" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-              :<div style={{textAlign:'center'}}><div style={{fontSize:48,marginBottom:8}}>{slide.emoji}</div><p style={{margin:0,fontSize:11,color:'rgba(255,255,255,0.4)'}}>Belum ada foto</p></div>
+        <div>
+          <div style={{height:160,background:C.g800,borderRadius:12,overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:10,position:'relative'}}>
+            {slides[activeSlide].image
+              ?<><img src={slides[activeSlide].image!} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/><button onClick={()=>setSlides(prev=>prev.map((s,i)=>i===activeSlide?{...s,image:null}:s))} style={{position:'absolute',top:8,right:8,background:'rgba(0,0,0,0.5)',color:'#fff',border:'none',borderRadius:6,padding:'3px 8px',fontSize:11,cursor:'pointer'}}>✕</button></>
+              :<span style={{fontSize:52}}>{slides[activeSlide].emoji}</span>
             }
-            {slide.image&&<button onClick={()=>setSlides(prev=>prev.map((s,i)=>i===activeSlide?{...s,image:''}:s))} style={{position:'absolute',top:8,right:8,background:'rgba(0,0,0,0.5)',color:'#fff',border:'none',borderRadius:6,padding:'4px 8px',fontSize:11,cursor:'pointer'}}>✕ Hapus</button>}
           </div>
-          <input type="file" accept="image/*" id={`banner-upload-${activeSlide}`} style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)uploadBanner(f,activeSlide)}}/>
-          <label htmlFor={`banner-upload-${activeSlide}`} style={{display:'block',padding:'10px',background:uploadingSlide?C.ink5:C.g50,color:uploadingSlide?C.ink4:C.g700,border:`1px solid ${C.g200}`,borderRadius:9,fontSize:13,fontWeight:600,cursor:uploadingSlide?'not-allowed':'pointer',textAlign:'center'}}>
+          <input type="file" accept="image/*" id={`sl-${activeSlide}`} style={{display:'none'}} onChange={async e=>{
+            const f=e.target.files?.[0];if(!f)return
+            setUploadingSlide(true)
+            const url=await uploadFile(f,`banners/slide-${activeSlide+1}-${Date.now()}.${f.name.split('.').pop()}`)
+            if(url)setSlides(prev=>prev.map((s,i)=>i===activeSlide?{...s,image:url}:s))
+            setUploadingSlide(false)
+          }}/>
+          <label htmlFor={`sl-${activeSlide}`} style={{display:'block',padding:'10px',background:uploadingSlide?C.ink5:C.g50,color:uploadingSlide?C.ink4:C.g700,border:`1px solid ${C.g200}`,borderRadius:9,fontSize:13,fontWeight:600,cursor:uploadingSlide?'not-allowed':'pointer',textAlign:'center'}}>
             {uploadingSlide?'⏳ Uploading...':'📤 Upload Foto Banner'}
           </label>
-          <p style={{margin:0,fontSize:10,color:C.ink4}}>Rekomendasi: 1440×600px, JPG/PNG. Foto akan menggantikan emoji.</p>
+          <p style={{margin:'6px 0 0',fontSize:10,color:C.ink4}}>Rekomendasi: 1440×600px JPG/PNG</p>
+        </div>
+      </div>
+      <div style={{borderTop:`1px solid ${C.ink6}`,paddingTop:14,marginTop:16}}>
+        <p style={{margin:0,fontSize:11,color:C.ink4}}>💡 Foto tersimpan di Supabase Storage. Untuk teks permanen, update array HERO_SLIDES di kode setelah deploy.</p>
+      </div>
+    </div>}
 
-          {/* PREVIEW INFO */}
-          <div style={{background:C.cream,borderRadius:9,padding:'11px 13px'}}>
-            <p style={{margin:'0 0 4px',fontSize:11,fontWeight:700,color:C.ink3}}>Preview Slide {activeSlide+1}</p>
-            <p style={{margin:'0 0 2px',fontSize:11,color:C.ink4}}><strong>Label:</strong> {slide.label}</p>
-            <p style={{margin:'0 0 2px',fontSize:11,color:C.ink4}}><strong>Judul:</strong> {slide.title} {slide.titleItalic}</p>
-            <p style={{margin:0,fontSize:11,color:C.ink4}}><strong>CTA:</strong> {slide.cta}</p>
+    {/* OUR ATHLETES */}
+    {tab==='athletes'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:14,padding:'22px'}}>
+      <h3 style={{margin:'0 0 4px',fontSize:15,fontWeight:700,color:C.ink}}>🏅 Our Athletes</h3>
+      <p style={{margin:'0 0 16px',fontSize:12,color:C.ink4}}>Testimoni athlete yang tampil di landing page & halaman Our Athletes</p>
+      {athletes.map((a,idx)=>(
+        <div key={a.id} style={{background:C.cream,borderRadius:12,padding:'16px',marginBottom:12}}>
+          <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
+            {/* PHOTO */}
+            <div style={{flexShrink:0}}>
+              <div style={{width:60,height:60,borderRadius:'50%',overflow:'hidden',background:C.g100,border:`2px solid ${C.g200}`,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:6}}>
+                {a.img?<img src={a.img} alt={a.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:16,fontWeight:700,color:C.g700}}>{a.initials}</span>}
+              </div>
+              <input type="file" accept="image/*" id={`ath-${idx}`} style={{display:'none'}} onChange={async e=>{
+                const f=e.target.files?.[0];if(!f)return
+                setUploadingAth(idx)
+                const url=await uploadFile(f,`athletes/ath-${idx+1}-${Date.now()}.${f.name.split('.').pop()}`)
+                if(url)setAthletes(prev=>prev.map((at,i)=>i===idx?{...at,img:url}:at))
+                setUploadingAth(null)
+              }}/>
+              <label htmlFor={`ath-${idx}`} style={{display:'block',fontSize:9,color:C.g600,fontWeight:600,cursor:'pointer',textAlign:'center'}}>{uploadingAth===idx?'..':'📷 Foto'}</label>
+            </div>
+            {/* FIELDS */}
+            <div style={{flex:1,display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+              {(['name','sport','initials'] as const).map(k=>(
+                <div key={k}>
+                  <label style={{fontSize:10,fontWeight:600,color:C.ink4,display:'block',marginBottom:2}}>{k.charAt(0).toUpperCase()+k.slice(1)}</label>
+                  <input value={a[k]||''} onChange={e=>setAthletes(prev=>prev.map((at,i)=>i===idx?{...at,[k]:e.target.value}:at))} style={{width:'100%',padding:'6px 9px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
+                </div>
+              ))}
+              <div style={{gridColumn:'1/-1'}}>
+                <label style={{fontSize:10,fontWeight:600,color:C.ink4,display:'block',marginBottom:2}}>Quote</label>
+                <textarea value={a.quote} onChange={e=>setAthletes(prev=>prev.map((at,i)=>i===idx?{...at,quote:e.target.value}:at))} rows={2} style={{width:'100%',padding:'6px 9px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,resize:'vertical',boxSizing:'border-box' as any}}/>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      ))}
+      <button onClick={saveAthletes} style={{padding:'9px 20px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>{saved?'✓ Tersimpan!':'Simpan Semua'}</button>
+    </div>}
 
-      <div style={{borderTop:`1px solid ${C.ink6}`,paddingTop:14,marginTop:16,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
-        <p style={{margin:0,fontSize:11,color:C.ink4}}>💡 Foto banner tersimpan permanen di Supabase Storage. Teks slide perlu di-hardcode di kode setelah selesai edit.</p>
-        <div style={{display:'flex',gap:9,alignItems:'center'}}>
-          {saved&&<span style={{fontSize:12,color:C.g500,fontWeight:600}}>✓ Tersimpan!</span>}
-          <button onClick={()=>{setSaved(true);setTimeout(()=>setSaved(false),3000)}} style={{padding:'9px 20px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>Simpan Semua</button>
+    {/* ABOUT US */}
+    {tab==='about'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:14,padding:'22px'}}>
+      <h3 style={{margin:'0 0 4px',fontSize:15,fontWeight:700,color:C.ink}}>📖 About Us</h3>
+      <p style={{margin:'0 0 16px',fontSize:12,color:C.ink4}}>Konten halaman About yang tampil saat klik "About" di navbar</p>
+      {([['title','Brand Name','The Elite Athletes'],['subtitle','Tagline / Subtitle','Born from passion, built for performance.'],['mission','Misi (kutipan besar)','Misi kami...']] as const).map(([k,label,ph])=>(
+        <div key={k} style={{marginBottom:14}}>
+          <label style={{fontSize:12,fontWeight:600,color:C.ink3,display:'block',marginBottom:4}}>{label}</label>
+          <input value={(about as any)[k]} onChange={e=>setAbout(p=>({...p,[k]:e.target.value}))} placeholder={ph} style={{width:'100%',padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
         </div>
+      ))}
+      <div style={{marginBottom:14}}>
+        <label style={{fontSize:12,fontWeight:600,color:C.ink3,display:'block',marginBottom:4}}>Deskripsi Lengkap</label>
+        <textarea value={about.desc} onChange={e=>setAbout(p=>({...p,desc:e.target.value}))} rows={4} style={{width:'100%',padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink,resize:'vertical',boxSizing:'border-box' as any}}/>
       </div>
-    </div>
-
-    {/* QUICK GUIDE */}
-    <div style={{background:C.blueBg,border:`1px solid ${C.blue}20`,borderRadius:12,padding:'14px 16px'}}>
-      <p style={{margin:'0 0 6px',fontSize:13,fontWeight:700,color:C.blue}}>📌 Cara update banner ke website</p>
-      <p style={{margin:'0 0 3px',fontSize:12,color:C.ink3}}>1. Upload foto di sini → copy URL foto yang muncul</p>
-      <p style={{margin:'0 0 3px',fontSize:12,color:C.ink3}}>2. Buka <code style={{background:C.ink6,padding:'1px 5px',borderRadius:4,fontSize:11}}>page.tsx</code> → cari <code style={{background:C.ink6,padding:'1px 5px',borderRadius:4,fontSize:11}}>const SLIDES</code></p>
-      <p style={{margin:0,fontSize:12,color:C.ink3}}>3. Ganti <code style={{background:C.ink6,padding:'1px 5px',borderRadius:4,fontSize:11}}>image:null</code> dengan URL foto, ubah teks slide sesuai keinginan</p>
-    </div>
+      <div style={{display:'flex',gap:10,alignItems:'center'}}>
+        <button onClick={saveAbout} style={{padding:'9px 20px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>{saved?'✓ Tersimpan!':'Simpan'}</button>
+        <span style={{fontSize:11,color:C.ink4}}>Aktif di sesi ini. Untuk permanen edit SITE_CONTENT di kode.</span>
+      </div>
+    </div>}
   </div>
 }
+
 
 function AdminIntegrations() {
   const [saved,setSaved]=useState<Record<string,any>>({})
@@ -2180,6 +2287,7 @@ export default function App() {
 
     {route==='home'    && <LandingPage  nav={nav} addToCart={addToCart} cartCount={cartCount}/>}
     {route==='catalog' && <CatalogPage  nav={nav} addToCart={addToCart} cartCount={cartCount}/>}
+    {route==='about'    && <AboutPage nav={nav} cartCount={globalCart.length}/>}
     {route==='athletes' && <OurAthletesPage nav={nav} cartCount={globalCart.length}/>}
     {route==='detail'  && routeData && <DetailPage product={routeData} nav={nav} addToCart={addToCart} cartCount={cartCount}/>}
     {route==='checkout'&& <CheckoutPage nav={nav} cart={globalCart} addToCart={addToCart}/>}
