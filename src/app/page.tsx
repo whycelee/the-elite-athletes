@@ -1385,8 +1385,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
         initialStock[sz]=el?parseInt(el.value)||0:0
       })
       // Upload image first if any
-      let imageUrl:string|null=null
-      if(imageFile) imageUrl=await uploadImage(imageFile, newProd.sku||'product')
+      const imageUrl:string|null = (newProdImgs as any[])[0] || null
       const res=await fetch('/api/products',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
         name:newProd.name,sku:newProd.sku,sport:newProd.sport,gender:newProd.gender,
         price:parseInt(newProd.price),hpp:parseInt(newProd.hpp)||0,
@@ -1443,31 +1442,33 @@ function AdminInventory({products:initP}:{products:any[]}) {
             </div>
           )}
 
-          {/* IMAGE UPLOAD */}
+          {/* IMAGE UPLOAD - 5 slots */}
           <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-            <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:8}}>Foto Produk</label>
-            <div style={{display:'flex',gap:12,alignItems:'center'}}>
-              <div style={{width:80,height:80,background:C.white,borderRadius:10,border:`2px dashed ${C.ink5}`,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
-                {previewImg
-                  ?<img src={previewImg} alt="preview" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-                  :<span style={{fontSize:28}}>{newProd.emoji||'📷'}</span>
-                }
-              </div>
-              <div style={{flex:1}}>
-                <label style={{display:'block',padding:'8px 14px',background:uploadingImg?C.ink5:C.g800,color:'#fff',borderRadius:8,fontSize:12,fontWeight:700,cursor:uploadingImg?'not-allowed':'pointer',textAlign:'center',marginBottom:6}}>
-                  {uploadingImg?'Mengupload...':'📷 Upload Foto'}
-                  <input type="file" accept="image/*" disabled={uploadingImg} onChange={async e=>{
-                    const file=e.target.files?.[0]
-                    if(!file)return
-                    const preview=URL.createObjectURL(file)
-                    setPreviewImg(preview)
-                    const url=await uploadImage(file, newProd.sku||'product')
-                    if(url)setPreviewImg(url)
-                  }} style={{display:'none'}}/>
-                </label>
-                <p style={{margin:0,fontSize:10,color:C.ink4}}>JPG, PNG, WebP. Maks 5MB.<br/>Disarankan 800×800px.</p>
-              </div>
+            <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:10}}>Foto Produk</label>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:6}}>
+              {[0,1,2,3,4].map(i=>(
+                <div key={i} style={{display:'flex',flexDirection:'column',gap:4,alignItems:'center'}}>
+                  <div style={{width:i===0?90:64,height:i===0?90:64,borderRadius:9,overflow:'hidden',border:`2px ${newProdImgs[i]?'solid '+C.g300:'dashed '+C.ink5}`,background:C.white,display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
+                    {newProdImgs[i]
+                      ?<><img src={newProdImgs[i]!} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/><button type="button" onClick={()=>setNewProdImgs((a:any)=>{const b=[...a];b[i]=null;return b})} style={{position:'absolute',top:2,right:2,width:15,height:15,borderRadius:'50%',background:C.red,color:'#fff',border:'none',cursor:'pointer',fontSize:8,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button></>
+                      :<span style={{fontSize:i===0?24:18}}>📷</span>
+                    }
+                    {uploadingImg&&<div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:10,color:'#fff'}}>...</span></div>}
+                  </div>
+                  <label style={{fontSize:9,color:C.g600,fontWeight:600,cursor:'pointer',textAlign:'center'}}>
+                    {i===0?'📌 Utama':`Det.${i}`}
+                    <input type="file" accept="image/*" style={{display:'none'}} onChange={async e=>{
+                      const file=e.target.files?.[0];if(!file)return
+                      setUploadingImg(true)
+                      const url=await uploadImage(file,(newProd.sku||'product')+'-img'+i)
+                      if(url)setNewProdImgs((a:any)=>{const b=[...a];b[i]=url;return b})
+                      setUploadingImg(false)
+                    }}/>
+                  </label>
+                </div>
+              ))}
             </div>
+            <p style={{margin:0,fontSize:10,color:C.ink4}}>Foto Utama tampil di catalog. Detail 1-4 tampil sebagai carousel di halaman produk. JPG/PNG/WebP, maks 5MB.</p>
           </div>
 
           {/* DISCOUNT PREVIEW */}
