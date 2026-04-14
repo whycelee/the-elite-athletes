@@ -256,6 +256,59 @@ function CartDrawer({cart,onClose,onRemove,onCheckout}:{cart:any[],onClose:()=>v
 // ═══════════════════════════════════════════════════════════
 // PAGE: LANDING
 // ═══════════════════════════════════════════════════════════
+const HERO_SLIDES = [
+  {id:1,bg:'#1F3B24',label:'New Season 2025',title:'Gear Built for',titleItalic:'Elite Athletes',subtitle:'Premium sport wear untuk Tennis, Badminton, Padel, Hyrox, Running, Golf, dan lebih.',cta:'Shop Collection',emoji:'👟',image:null as string|null},
+  {id:2,bg:'#1A2E1E',label:'New Arrival',title:'Court Precision',titleItalic:'Polo Series',subtitle:'Engineered for match-day performance. Moisture-wicking, UV Protection.',cta:'Lihat Koleksi',emoji:'🎾',image:null as string|null},
+  {id:3,bg:'#2D4A35',label:'Best Seller',title:'Run Further,',titleItalic:'Run Faster',subtitle:'AeroStride collection — 4-way stretch, reflective details.',cta:'Shop Running',emoji:'🏃',image:null as string|null},
+  {id:4,bg:'#1F3B24',label:'New Sport',title:'Badminton',titleItalic:'Performance Wear',subtitle:'Lightweight, breathable, built for the court.',cta:'Explore Now',emoji:'🏸',image:null as string|null},
+  {id:5,bg:'#243D2A',label:'Limited Edition',title:'Hyrox Ready',titleItalic:'Collection',subtitle:'Built for the toughest workouts. Anti-odor, seamless construction.',cta:'Shop Hyrox',emoji:'🏋️',image:null as string|null},
+]
+
+function HeroCarousel({nav,heroSlide,setHeroSlide,handleAdd}:{nav:(p:string,d?:any)=>void,heroSlide:number,setHeroSlide:(n:any)=>void,handleAdd:(p:any)=>void}){
+  return(
+    <section style={{paddingTop:56+28,background:C.cream,position:'relative',overflow:'hidden'}}>
+      <div style={{position:'relative',height:'min(85vh,600px)',overflow:'hidden'}}>
+        {HERO_SLIDES.map((slide,idx)=>(
+          <div key={slide.id} style={{position:'absolute',inset:0,transition:'opacity 0.6s ease',opacity:heroSlide===idx?1:0,pointerEvents:heroSlide===idx?'auto':'none'}}>
+            <div style={{position:'absolute',top:0,right:0,width:'44%',height:'100%',background:slide.bg,clipPath:'polygon(12% 0, 100% 0, 100% 100%, 0 100%)'}}/>
+            <div style={{maxWidth:1280,margin:'0 auto',padding:'clamp(28px,5vw,60px) 5vw',width:'100%',height:'100%',display:'grid',gridTemplateColumns:'1fr 1fr',gap:0,alignItems:'center',position:'relative',zIndex:1,boxSizing:'border-box'}}>
+              <div style={{paddingRight:'8%'}}>
+                <p style={{margin:'0 0 14px',fontSize:11,fontWeight:600,color:C.g500,letterSpacing:'0.18em',textTransform:'uppercase',display:'flex',alignItems:'center',gap:8}}><span style={{display:'inline-block',width:22,height:1.5,background:C.g500}}/>{slide.label}</p>
+                <h1 style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.8rem,5vw,3.8rem)',fontWeight:400,lineHeight:1.08,margin:'0 0 16px',letterSpacing:'-0.02em',color:C.ink}}>{slide.title}<br/><em style={{color:C.g700,fontStyle:'italic'}}>{slide.titleItalic}</em></h1>
+                <p style={{fontSize:14,color:C.ink3,lineHeight:1.8,margin:'0 0 28px',maxWidth:400}}>{slide.subtitle}</p>
+                <button onClick={()=>nav('catalog')} style={{background:C.g800,color:C.cream,border:'none',borderRadius:10,padding:'13px 26px',fontSize:14,fontWeight:600,cursor:'pointer'}}>{slide.cta}</button>
+              </div>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'center',paddingLeft:'6%'}}>
+                {slide.image
+                  ?<img src={slide.image} alt={slide.title} style={{width:'min(340px,55vw)',height:'min(380px,55vw)',objectFit:'cover',borderRadius:24}}/>
+                  :<div style={{width:'min(300px,55vw)',height:'min(340px,55vw)',background:'rgba(255,255,255,0.06)',borderRadius:24,border:'1px solid rgba(255,255,255,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'clamp(60px,12vw,100px)'}}>{slide.emoji}</div>
+                }
+              </div>
+            </div>
+          </div>
+        ))}
+        <div style={{position:'absolute',bottom:20,left:'50%',transform:'translateX(-50%)',display:'flex',gap:8,zIndex:10}}>
+          {HERO_SLIDES.map((_,i)=>(
+            <button key={i} onClick={()=>setHeroSlide(i)} style={{width:i===heroSlide?24:8,height:8,borderRadius:4,background:i===heroSlide?C.g400:'rgba(255,255,255,0.4)',border:'none',cursor:'pointer',transition:'all 0.3s',padding:0}}/>
+          ))}
+        </div>
+        <button onClick={()=>setHeroSlide((s:number)=>(s-1+HERO_SLIDES.length)%HERO_SLIDES.length)} style={{position:'absolute',left:16,top:'50%',transform:'translateY(-50%)',width:40,height:40,borderRadius:'50%',background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'#fff',cursor:'pointer',fontSize:20,display:'flex',alignItems:'center',justifyContent:'center',zIndex:10}}>‹</button>
+        <button onClick={()=>setHeroSlide((s:number)=>(s+1)%HERO_SLIDES.length)} style={{position:'absolute',right:16,top:'50%',transform:'translateY(-50%)',width:40,height:40,borderRadius:'50%',background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'#fff',cursor:'pointer',fontSize:20,display:'flex',alignItems:'center',justifyContent:'center',zIndex:10}}>›</button>
+      </div>
+      <div style={{background:C.white,borderTop:`1px solid ${C.ink6}`,padding:'14px 5vw'}}>
+        <div style={{maxWidth:1280,margin:'0 auto',display:'flex',gap:0}}>
+          {[['15K+','Athletes'],['12','Sports'],['4.9 ★','Rating'],['2 Jam','Pengiriman']].map(([v,l],i)=>(
+            <div key={l} style={{flex:1,paddingLeft:i>0?14:0,paddingRight:14,borderLeft:i>0?`1px solid ${C.ink6}`:'none',textAlign:'center'}}>
+              <div style={{fontSize:'clamp(14px,3vw,19px)',fontWeight:700,color:C.g700}}>{v}</div>
+              <div style={{fontSize:10,color:C.ink4,fontWeight:500,marginTop:2}}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addToCart:(item:any)=>void,cartCount:number}) {
   const [scrolled,setScrolled]=useState(false)
   const [heroSlide,setHeroSlide]=useState(0)
@@ -263,10 +316,10 @@ function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
   const [cart,setCart]=useState<any[]>([])
   const [toast,setToast]=useState<string|null>(null)
   useEffect(()=>{const fn=()=>setScrolled(window.scrollY>30);window.addEventListener('scroll',fn);return()=>window.removeEventListener('scroll',fn)},[])
-  },[])  
   useEffect(()=>{
     const timer=setInterval(()=>setHeroSlide((s:number)=>(s+1)%5),5000)
     return()=>clearInterval(timer)
+  },[])
   function handleAdd(p:any){const item={...p,qty:1,size:p.sizes[0]};setCart(c=>[...c,item]);addToCart(item);setToast(p.name)}
   const cats=[{icon:'🎾',label:'Tennis',count:48},{icon:'🏸',label:'Badminton',count:22},{icon:'🏓',label:'Padel',count:36},{icon:'🏋️',label:'Hyrox',count:29},{icon:'💪',label:'Gym',count:112},{icon:'🏃',label:'Running',count:94},{icon:'⛳',label:'Golf',count:41},{icon:'🧘',label:'Pilates',count:33},{icon:'🪷',label:'Yoga',count:57},{icon:'👟',label:'Footwear',count:18},{icon:'🎒',label:'Aksesoris',count:24}]
   return <div style={{background:C.cream,minHeight:'100vh'}}>
@@ -274,60 +327,8 @@ function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
     {showCart&&<CartDrawer cart={cart} onClose={()=>setShowCart(false)} onRemove={i=>setCart(c=>c.filter((_,idx)=>idx!==i))} onCheckout={()=>{setShowCart(false);nav('checkout')}}/>}
     <StoreNavbar nav={nav} cartCount={cartCount} onCartClick={()=>setShowCart(true)} scrolled={scrolled}/>
     {/* HERO CAROUSEL */}
-    {(()=>{
-      const SLIDES = [
-        {id:1, bg:C.g800, label:'New Season 2025', title:'Gear Built for', titleItalic:'Elite Athletes', subtitle:'Premium sport wear untuk Tennis, Badminton, Padel, Hyrox, Running, Golf, dan lebih.', cta:'Shop Collection', image:null, emoji:'👟'},
-        {id:2, bg:'#1A2E1E', label:'New Arrival', title:'Court Precision', titleItalic:'Polo Series', subtitle:'Engineered for match-day performance. Moisture-wicking, UV Protection.', cta:'Lihat Koleksi', image:null, emoji:'🎾'},
-        {id:3, bg:'#2D4A35', label:'Best Seller', title:'Run Further,', titleItalic:'Run Faster', subtitle:'AeroStride collection — designed for every stride. 4-way stretch, reflective details.', cta:'Shop Running', image:null, emoji:'🏃'},
-        {id:4, bg:'#1F3B24', label:'New Sport', title:'Badminton', titleItalic:'Performance Wear', subtitle:'Lightweight, breathable, built for the court. Move freely, play harder.', cta:'Explore Now', image:null, emoji:'🏸'},
-        {id:5, bg:'#243D2A', label:'Limited Edition', title:'Hyrox Ready', titleItalic:'Collection', subtitle:'Built for the toughest workouts. Anti-odor, seamless construction.', cta:'Shop Hyrox', image:null, emoji:'🏋️'},
-      ]
-      return (
-        <section style={{paddingTop:56+28,background:C.cream,position:'relative',overflow:'hidden'}}>
-          <div style={{position:'relative',height:'min(85vh,600px)',overflow:'hidden'}}>
-            {SLIDES.map((slide,idx)=>(
-              <div key={slide.id} style={{position:'absolute',inset:0,transition:'opacity 0.6s ease',opacity:heroSlide===idx?1:0,pointerEvents:heroSlide===idx?'auto':'none'}}>
-                <div style={{position:'absolute',top:0,right:0,width:'44%',height:'100%',background:slide.bg,clipPath:'polygon(12% 0, 100% 0, 100% 100%, 0 100%)'}}/>
-                <div style={{maxWidth:1280,margin:'0 auto',padding:'48px 5vw',width:'100%',height:'100%',display:'grid',gridTemplateColumns:'1fr 1fr',gap:0,alignItems:'center',position:'relative',zIndex:1,boxSizing:'border-box'}}>
-                  <div style={{paddingRight:'8%'}}>
-                    <p style={{margin:'0 0 14px',fontSize:11,fontWeight:600,color:C.g500,letterSpacing:'0.18em',textTransform:'uppercase',display:'flex',alignItems:'center',gap:8}}><span style={{display:'inline-block',width:22,height:1.5,background:C.g500}}/>{slide.label}</p>
-                    <h1 style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(2rem,5vw,3.8rem)',fontWeight:400,lineHeight:1.08,margin:'0 0 16px',letterSpacing:'-0.02em',color:C.ink}}>{slide.title}<br/><em style={{color:C.g700,fontStyle:'italic'}}>{slide.titleItalic}</em></h1>
-                    <p style={{fontSize:14,color:C.ink3,lineHeight:1.8,margin:'0 0 28px',maxWidth:400}}>{slide.subtitle}</p>
-                    <button onClick={()=>nav('catalog')} style={{background:C.g800,color:C.cream,border:'none',borderRadius:10,padding:'13px 26px',fontSize:14,fontWeight:600,cursor:'pointer'}}>{slide.cta}</button>
-                  </div>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',paddingLeft:'6%'}}>
-                    {slide.image
-                      ?<img src={slide.image} alt={slide.title} style={{width:'min(340px,55vw)',height:'min(380px,55vw)',objectFit:'cover',borderRadius:24}}/>
-                      :<div style={{width:'min(300px,55vw)',height:'min(340px,55vw)',background:'rgba(255,255,255,0.06)',borderRadius:24,border:'1px solid rgba(255,255,255,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'clamp(60px,12vw,100px)'}}>{slide.emoji}</div>
-                    }
-                  </div>
-                </div>
-              </div>
-            ))}
-            {/* DOTS */}
-            <div style={{position:'absolute',bottom:20,left:'50%',transform:'translateX(-50%)',display:'flex',gap:8,zIndex:10}}>
-              {SLIDES.map((_,i)=>(
-                <button key={i} onClick={()=>setHeroSlide(i)} style={{width:i===heroSlide?24:8,height:8,borderRadius:4,background:i===heroSlide?C.g400:'rgba(255,255,255,0.4)',border:'none',cursor:'pointer',transition:'all 0.3s',padding:0}}/>
-              ))}
-            </div>
-            {/* ARROWS */}
-            <button onClick={()=>setHeroSlide(s=>(s-1+SLIDES.length)%SLIDES.length)} style={{position:'absolute',left:16,top:'50%',transform:'translateY(-50%)',width:40,height:40,borderRadius:'50%',background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'#fff',cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',zIndex:10,backdropFilter:'blur(4px)'}}>‹</button>
-            <button onClick={()=>setHeroSlide(s=>(s+1)%SLIDES.length)} style={{position:'absolute',right:16,top:'50%',transform:'translateY(-50%)',width:40,height:40,borderRadius:'50%',background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'#fff',cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',zIndex:10,backdropFilter:'blur(4px)'}}>›</button>
-          </div>
-          {/* STATS BAR */}
-          <div style={{background:C.white,borderTop:`1px solid ${C.ink6}`,padding:'14px 5vw'}}>
-            <div className="stats-row" style={{maxWidth:1280,margin:'0 auto',display:'flex',gap:0}}>
-              {[['15K+','Athletes'],['12','Sports'],['4.9 ★','Rating'],['2 Jam','Pengiriman']].map(([v,l],i)=>(
-                <div key={l} style={{flex:1,paddingLeft:i>0?14:0,paddingRight:14,borderLeft:i>0?`1px solid ${C.ink6}`:'none',textAlign:'center'}}>
-                  <div style={{fontSize:'clamp(14px,3vw,19px)',fontWeight:700,color:C.g700}}>{v}</div>
-                  <div style={{fontSize:10,color:C.ink4,fontWeight:500,marginTop:2}}>{l}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )
-    })()}
+    {/* HERO CAROUSEL */}
+    <HeroCarousel nav={nav} heroSlide={heroSlide} setHeroSlide={setHeroSlide} handleAdd={handleAdd}/>
     {/* CATEGORIES */}
     <section style={{padding:'68px 5vw',background:C.white}}>
       <div style={{maxWidth:1280,margin:'0 auto'}}>
@@ -2179,7 +2180,7 @@ export default function App() {
 
     {route==='home'    && <LandingPage  nav={nav} addToCart={addToCart} cartCount={cartCount}/>}
     {route==='catalog' && <CatalogPage  nav={nav} addToCart={addToCart} cartCount={cartCount}/>}
-    {route==='athletes' && <OurAthletesPage nav={nav} cartCount={cart.length}/>}
+    {route==='athletes' && <OurAthletesPage nav={nav} cartCount={globalCart.length}/>}
     {route==='detail'  && routeData && <DetailPage product={routeData} nav={nav} addToCart={addToCart} cartCount={cartCount}/>}
     {route==='checkout'&& <CheckoutPage nav={nav} cart={globalCart} addToCart={addToCart}/>}
 
