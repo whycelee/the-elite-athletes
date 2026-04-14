@@ -1165,35 +1165,43 @@ function AdminOrders({orders:initO}:{orders:any[]}) {
   </div>
 }
 
-function EditProductModal({product:ep,onSave,onClose,uploadImageFn}:{product:any,onSave:(id:string,data:any)=>void,onClose:()=>void,uploadImageFn:(f:File,sku:string)=>Promise<string|null>}){
+function EditProductModal({product:ep,onSave,onDelete,onClose,uploadImageFn}:{product:any,onSave:(id:string,data:any)=>void,onDelete:(id:string)=>void,onClose:()=>void,uploadImageFn:(f:File,sku:string)=>Promise<string|null>}){
   const sizesFromStock=Object.keys(ep.stock||{})
   const [form,setForm]=useState({
-    name:ep.name||'',price:String(ep.price||''),original:String(ep.original||ep.original_price||''),
-    hpp:String(ep.hpp||''),desc:ep.description||ep.desc||'',sport:ep.sport||'Tennis',
-    gender:ep.gender||'Men',extraSports:(ep.tags||[]).join(', '),
+    name:ep.name||'',
+    sku:ep.sku||'',
+    price:String(ep.price||''),
+    original:String(ep.original||ep.original_price||''),
+    hpp:String(ep.hpp||''),
+    desc:ep.description||ep.desc||'',
+    sport:ep.sport||'Tennis',
+    gender:ep.gender||'Men',
+    extraSports:(ep.tags||[]).join(', '),
     sizes:sizesFromStock.length>0?sizesFromStock.join(','):(ep.sizes||[]).join(','),
-    colors:(ep.colors||[]).join(','),hasSizes:true,hasColors:true,
+    colors:(ep.colors||[]).join(','),
+    hasSizes:true,
+    hasColors:true,
   })
   const [stock,setStock]=useState<Record<string,number>>({...ep.stock})
-  const [imgs,setImgs]=useState<(string|null)[]>([ep.image_url||null,null,null,null,null,null])
+  const [imgs,setImgs]=useState<(string|null)[]>([ep.image_url||null,null,null,null,null])
+  const [uploading,setUploading]=useState(false)
   const [saving,setSaving]=useState(false)
-  const stockTotal=Object.values(stock).reduce((s:number,n:number)=>s+n,0)
-
-  async function handleImgUpload(idx:number,file:File){
-    const url=await uploadImageFn(file,ep.sku+'-img'+idx)
-    if(url)setImgs(arr=>{const a=[...arr];a[idx]=url;return a})
-  }
+  const [confirmDelete,setConfirmDelete]=useState(false)
+  const stockTotal=Object.values(stock).reduce((s:number,n:number)=>s+(n as number),0)
 
   async function handleSave(){
     setSaving(true)
+    const sizesArr=form.sizes.split(',').map((s:string)=>s.trim()).filter(Boolean)
+    const colorsArr=form.colors.split(',').map((s:string)=>s.trim()).filter(Boolean)
+    const tagsArr=form.extraSports?form.extraSports.split(',').map((s:string)=>s.trim()).filter(Boolean):[]
     const payload={
       name:form.name,price:parseInt(form.price),
       original:form.original?parseInt(form.original):null,
-      hpp:parseInt(form.hpp)||0,description:form.desc,
+      hpp:parseInt(form.hpp)||0,
+      description:form.desc,
       sport:form.sport,gender:form.gender,
-      tags:form.extraSports?form.extraSports.split(',').map((s:string)=>s.trim()).filter(Boolean):[],
-      sizes:form.sizes.split(',').map((s:string)=>s.trim()).filter(Boolean),
-      colors:form.colors.split(',').map((s:string)=>s.trim()).filter(Boolean),
+      tags:tagsArr,
+      sizes:sizesArr,colors:colorsArr,
       image_url:imgs[0]||ep.image_url,
       gallery:imgs.filter(Boolean),
       stock,
@@ -1204,48 +1212,61 @@ function EditProductModal({product:ep,onSave,onClose,uploadImageFn}:{product:any
     onClose()
   }
 
-  const ImgSlot=({idx,label}:{idx:number,label:string})=>(
-    <div style={{display:'flex',flexDirection:'column',gap:5,alignItems:'center'}}>
-      <div style={{width:idx===0?100:72,height:idx===0?100:72,borderRadius:10,overflow:'hidden',border:`2px ${imgs[idx]?'solid '+C.g300:'dashed '+C.ink5}`,background:C.cream,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,position:'relative'}}>
-        {imgs[idx]?<img src={imgs[idx]!} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:idx===0?28:20}}>📷</span>}
-        {imgs[idx]&&<button onClick={()=>setImgs(a=>{const b=[...a];b[idx]=null;return b})} style={{position:'absolute',top:2,right:2,width:16,height:16,borderRadius:'50%',background:C.red,color:'#fff',border:'none',cursor:'pointer',fontSize:9,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>}
-      </div>
-      <label style={{fontSize:10,color:C.g700,fontWeight:600,cursor:'pointer',textAlign:'center'}}>
-        {label}
-        <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)handleImgUpload(idx,f)}}/>
-      </label>
-    </div>
-  )
+  async function handleDelete(){
+    await fetch(`/api/products/${ep.id}`,{method:'DELETE'})
+    onDelete(ep.id)
+    onClose()
+  }
 
   return <div style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',padding:12}}>
     <div style={{background:C.white,borderRadius:16,width:'min(560px,98vw)',maxHeight:'92vh',overflowY:'auto',padding:'20px 22px',display:'flex',flexDirection:'column',gap:13}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <h3 style={{margin:0,fontSize:16,fontWeight:700,color:C.ink}}>Edit Produk</h3>
+        <h3 style={{margin:0,fontSize:16,fontWeight:700,color:C.ink}}>Edit Produk — {ep.name}</h3>
         <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:18,color:C.ink3}}>✕</button>
       </div>
 
-      {/* FOTO — 1 utama + 5 detail */}
+      {/* FOTO 5 SLOT */}
       <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-        <p style={{margin:'0 0 10px',fontSize:12,fontWeight:700,color:C.ink3}}>Foto Produk</p>
-        <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
-          <ImgSlot idx={0} label="📌 Utama"/>
-          {[1,2,3,4,5].map(i=><ImgSlot key={i} idx={i} label={`Detail ${i}`}/>)}
+        <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:10}}>Foto Produk</label>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:6}}>
+          {[0,1,2,3,4].map(i=>(
+            <div key={i} style={{display:'flex',flexDirection:'column',gap:4,alignItems:'center'}}>
+              <div style={{width:i===0?90:64,height:i===0?90:64,borderRadius:9,overflow:'hidden',border:`2px ${imgs[i]?'solid '+C.g300:'dashed '+C.ink5}`,background:C.white,display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
+                {imgs[i]
+                  ?<><img src={imgs[i]!} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/><button type="button" onClick={()=>setImgs(a=>{const b=[...a];b[i]=null;return b})} style={{position:'absolute',top:2,right:2,width:15,height:15,borderRadius:'50%',background:C.red,color:'#fff',border:'none',cursor:'pointer',fontSize:8,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button></>
+                  :<span style={{fontSize:i===0?24:18}}>📷</span>
+                }
+              </div>
+              <label style={{fontSize:9,color:C.g600,fontWeight:600,cursor:'pointer',textAlign:'center'}}>
+                {i===0?'📌 Utama':`Det.${i}`}
+                <input type="file" accept="image/*" style={{display:'none'}} onChange={async e=>{
+                  const file=e.target.files?.[0];if(!file)return
+                  setUploading(true)
+                  const url=await uploadImageFn(file,ep.sku+'-img'+i)
+                  if(url)setImgs(a=>{const b=[...a];b[i]=url;return b})
+                  setUploading(false)
+                }}/>
+              </label>
+            </div>
+          ))}
         </div>
-        <p style={{margin:'7px 0 0',fontSize:10,color:C.ink4}}>Foto Utama tampil di catalog. Detail tampil sebagai carousel di halaman produk.</p>
+        {uploading&&<p style={{margin:0,fontSize:11,color:C.g500,fontWeight:600}}>⏳ Mengupload foto...</p>}
+        <p style={{margin:'4px 0 0',fontSize:10,color:C.ink4}}>Foto Utama tampil di catalog. Detail 1-4 tampil sebagai carousel di halaman produk.</p>
       </div>
 
-      {/* BASIC FIELDS */}
+      {/* FIELDS sama dengan Add Product */}
       {[
         {label:'Nama Produk *',key:'name',placeholder:'Court Precision Polo'},
+        {label:'SKU',key:'sku',placeholder:'TEA-TEN-001',disabled:true},
         {label:'Harga Jual *',key:'price',placeholder:'649000',type:'number'},
         {label:'Harga Asli / Sebelum Diskon',key:'original',placeholder:'890000',type:'number'},
         {label:'HPP / Modal',key:'hpp',placeholder:'280000',type:'number'},
         {label:'Deskripsi',key:'desc',placeholder:'Deskripsi singkat produk...'},
-        {label:'Sport Tambahan (pisahkan koma)',key:'extraSports',placeholder:'Gym, Running'},
+        {label:'Sport Tambahan (opsional, pisahkan koma)',key:'extraSports',placeholder:'Gym, Running'},
       ].map(f=>(
         <div key={f.key} style={{display:'flex',flexDirection:'column',gap:4}}>
           <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>{f.label}</label>
-          <input type={f.type||'text'} value={(form as any)[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+          <input type={(f as any).type||'text'} disabled={(f as any).disabled} value={(form as any)[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:(f as any).disabled?C.ink4:C.ink,background:(f as any).disabled?C.cream:C.white}}/>
         </div>
       ))}
 
@@ -1274,14 +1295,38 @@ function EditProductModal({product:ep,onSave,onClose,uploadImageFn}:{product:any
         </div>
       </div>
 
-      {/* UKURAN & WARNA */}
-      <div style={{display:'flex',flexDirection:'column',gap:4}}>
-        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Ukuran (pisahkan koma)</label>
-        <input value={form.sizes} onChange={e=>setForm(p=>({...p,sizes:e.target.value}))} placeholder="S,M,L,XL" style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+      {/* UKURAN */}
+      <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+          <label style={{fontSize:12,fontWeight:700,color:C.ink3}}>Ukuran</label>
+        </div>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
+          {['All Size','XS','S','M','L','XL','XXL','XXXL','36','37','38','39','40','41','42','43','44','45'].map(sz=>{
+            const curr=form.sizes.split(',').map((s:string)=>s.trim())
+            const active=curr.includes(sz)
+            return <button key={sz} type="button" onClick={()=>{
+              const next=active?curr.filter((s:string)=>s!==sz):[...curr,sz]
+              setForm(p=>({...p,sizes:next.filter(Boolean).join(',')}))
+            }} style={{padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:active?700:400,cursor:'pointer',background:active?C.g800:C.white,color:active?'#fff':C.ink2,border:`1px solid ${active?C.g800:C.ink5}`}}>{sz}</button>
+          })}
+        </div>
+        <input value={form.sizes} onChange={e=>setForm(p=>({...p,sizes:e.target.value}))} placeholder="Atau ketik manual: S,M,L,XL" style={{width:'100%',padding:'7px 10px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
       </div>
-      <div style={{display:'flex',flexDirection:'column',gap:4}}>
-        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Warna (pisahkan koma)</label>
-        <input value={form.colors} onChange={e=>setForm(p=>({...p,colors:e.target.value}))} placeholder="Black,White,Forest" style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+
+      {/* WARNA */}
+      <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+        <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:8}}>Warna</label>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
+          {['Black','White','Forest','Navy','Charcoal','Olive','Sage','Blush','Khaki','Cream','Sand','Red','Blue','Yellow','Pink','Purple','Grey','Brown'].map(cl=>{
+            const curr=form.colors.split(',').map((s:string)=>s.trim())
+            const active=curr.includes(cl)
+            return <button key={cl} type="button" onClick={()=>{
+              const next=active?curr.filter((s:string)=>s!==cl):[...curr,cl]
+              setForm(p=>({...p,colors:next.filter(Boolean).join(',')}))
+            }} style={{padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:active?700:400,cursor:'pointer',background:active?C.g800:C.white,color:active?'#fff':C.ink2,border:`1px solid ${active?C.g800:C.ink5}`}}>{cl}</button>
+          })}
+        </div>
+        <input value={form.colors} onChange={e=>setForm(p=>({...p,colors:e.target.value}))} placeholder="Atau ketik manual: Black,White" style={{width:'100%',padding:'7px 10px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
       </div>
 
       {/* STOK */}
@@ -1293,7 +1338,7 @@ function EditProductModal({product:ep,onSave,onClose,uploadImageFn}:{product:any
               <label style={{display:'block',fontSize:10,fontWeight:700,color:C.ink4,marginBottom:4,textTransform:'uppercase'}}>{sz}</label>
               <div style={{display:'flex',alignItems:'center',border:`1.5px solid ${C.ink5}`,borderRadius:8,overflow:'hidden',background:C.white}}>
                 <button onClick={()=>setStock(s=>({...s,[sz]:Math.max(0,(s[sz]||0)-1)}))} style={{width:26,background:'none',border:'none',cursor:'pointer',fontSize:15,color:C.ink2}}>−</button>
-                <input type="number" min={0} value={qty} onFocus={e=>e.target.select()} onChange={e=>setStock(s=>({...s,[sz]:Math.max(0,parseInt(e.target.value)||0)}))} style={{flex:1,width:0,textAlign:'center',border:'none',background:'transparent',fontSize:13,fontWeight:700,color:C.ink,fontFamily:'inherit',outline:'none',padding:'6px 0'}}/>
+                <input type="number" min={0} value={qty as number} onFocus={e=>e.target.select()} onChange={e=>setStock(s=>({...s,[sz]:Math.max(0,parseInt(e.target.value)||0)}))} style={{flex:1,width:0,textAlign:'center',border:'none',background:'transparent',fontSize:13,fontWeight:700,color:C.ink,fontFamily:'inherit',outline:'none',padding:'6px 0'}}/>
                 <button onClick={()=>setStock(s=>({...s,[sz]:(s[sz]||0)+1}))} style={{width:26,background:'none',border:'none',cursor:'pointer',fontSize:15,color:C.ink2}}>+</button>
               </div>
             </div>
@@ -1305,15 +1350,32 @@ function EditProductModal({product:ep,onSave,onClose,uploadImageFn}:{product:any
         </div>
       </div>
 
-      <div style={{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:4,borderTop:`1px solid ${C.ink6}`}}>
-        <button onClick={onClose} style={{padding:'10px 18px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
-        <button onClick={handleSave} disabled={saving} style={{padding:'10px 22px',background:saving?C.ink5:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:saving?'not-allowed':'pointer'}}>
-          {saving?'Menyimpan...':'Simpan Perubahan'}
-        </button>
+      {/* DELETE CONFIRM */}
+      {confirmDelete&&(
+        <div style={{background:C.redBg,border:`1px solid ${C.redLight}`,borderRadius:10,padding:'12px 14px'}}>
+          <p style={{margin:'0 0 10px',fontSize:13,fontWeight:700,color:C.red}}>⚠️ Hapus produk "{ep.name}"?</p>
+          <p style={{margin:'0 0 12px',fontSize:12,color:C.red}}>Tindakan ini tidak bisa dibatalkan. Produk akan dihapus permanen.</p>
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={()=>setConfirmDelete(false)} style={{flex:1,padding:'9px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
+            <button onClick={handleDelete} style={{flex:1,padding:'9px',background:C.red,color:'#fff',border:'none',borderRadius:8,fontSize:13,fontWeight:700,cursor:'pointer'}}>Ya, Hapus</button>
+          </div>
+        </div>
+      )}
+
+      {/* BUTTONS */}
+      <div style={{display:'flex',gap:9,justifyContent:'space-between',paddingTop:4,borderTop:`1px solid ${C.ink6}`}}>
+        <button onClick={()=>setConfirmDelete(true)} style={{padding:'10px 16px',background:C.redBg,border:`1px solid ${C.redLight}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.red,cursor:'pointer'}}>🗑️ Hapus Produk</button>
+        <div style={{display:'flex',gap:9}}>
+          <button onClick={onClose} style={{padding:'10px 18px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
+          <button onClick={handleSave} disabled={saving} style={{padding:'10px 22px',background:saving?C.ink5:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:saving?'not-allowed':'pointer'}}>
+            {saving?'Menyimpan...':'Simpan Perubahan'}
+          </button>
+        </div>
       </div>
     </div>
   </div>
 }
+
 
 function AdminInventory({products:initP}:{products:any[]}) {
   const [products,setProducts]=useState(initP)
@@ -1411,7 +1473,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
   }
 
   return <div style={{display:'flex',flexDirection:'column',gap:16}}>
-    {editProd&&<EditProductModal product={editProd} onSave={saveProduct} onClose={()=>setEditProd(null)} uploadImageFn={uploadImage}/>}
+    {editProd&&<EditProductModal product={editProd} onSave={saveProduct} onDelete={(id:string)=>setProducts((p:any[])=>p.filter((x:any)=>x.id!==id))} onClose={()=>setEditProd(null)} uploadImageFn={uploadImage}/>}
     {showAdd&&(
       <div style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,0.35)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
         <div style={{background:C.white,borderRadius:16,width:'min(520px,95vw)',maxHeight:'90vh',overflowY:'auto',padding:'22px 24px',display:'flex',flexDirection:'column',gap:14}}>
