@@ -422,8 +422,10 @@ function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
           reviews:p.review_count||0,
           sports:p.tags||[],
           image_url:p.image_url||null,
-          sizes:p.sizes||[],
-          colors:p.colors||[],
+          gallery:Array.isArray(p.gallery)?p.gallery:[],
+          desc:p.description||p.desc||'',
+          sizes:Array.isArray(p.sizes)?p.sizes:[],
+          colors:Array.isArray(p.colors)?p.colors:[],
           stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))
         }))
         setDbProducts(norm)
@@ -503,6 +505,8 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
           reviews:p.review_count||0,
           sports:Array.isArray(p.tags)?p.tags:[],
           image_url:p.image_url||null,
+          gallery:Array.isArray(p.gallery)?p.gallery:[],
+          desc:p.description||p.desc||'',
           sizes:Array.isArray(p.sizes)?p.sizes:[],
           colors:Array.isArray(p.colors)?p.colors:[],
           stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))
@@ -1466,6 +1470,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
   const [imageFile,setImageFile]=useState<File|null>(null)
   const [imagePreview,setImagePreview]=useState<string|null>(null)
   const [newProdImgs,setNewProdImgs]=useState<(string|null)[]>([null,null,null,null,null])
+  const [newStockMap,setNewStockMap]=useState<Record<string,number>>({})
   const [uploadingImg,setUploadingImg]=useState(false)
   const [previewImg,setPreviewImg]=useState<string|null>(null)
   const sports=['all',...new Set(products.map((p:any)=>p.sport))]
@@ -1510,22 +1515,17 @@ function AdminInventory({products:initP}:{products:any[]}) {
       const sizesArr=newProd.hasSizes?newProd.sizes.split(',').map((s:string)=>s.trim()).filter(Boolean):['One Size']
       const colorsArr=newProd.hasColors?newProd.colors.split(',').map((s:string)=>s.trim()).filter(Boolean):['Default']
       const tagsArr=newProd.extraSports?newProd.extraSports.split(',').map((s:string)=>s.trim()).filter(Boolean):[]
-      // Read initial stock from inputs
-      const initialStock:Record<string,number>={}
-      sizesArr.forEach((sz:string)=>{
-        const el=document.getElementById(`stock-${sz}`) as HTMLInputElement
-        initialStock[sz]=el?parseInt(el.value)||0:0
-      })
-      // Upload image first if any
+      // Use state-based stock (NOT document.getElementById which is unreliable)
       const imageUrl:string|null = (newProdImgs as any[])[0] || null
+      const galleryUrls=(newProdImgs as any[]).filter(Boolean)
       const res=await fetch('/api/products',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
         name:newProd.name,sku:newProd.sku,sport:newProd.sport,gender:newProd.gender,
         price:parseInt(newProd.price),hpp:parseInt(newProd.hpp)||0,
         original:newProd.original?parseInt(newProd.original):null,
         emoji:newProd.emoji,desc:newProd.desc,
         sizes:sizesArr,colors:colorsArr,
-        tags:tagsArr,image_url:imageUrl,
-        initial_stock:initialStock
+        tags:tagsArr,image_url:imageUrl,gallery:galleryUrls,
+        initial_stock:newStockMap
       })})
       const d=await res.json()
       if(res.ok){
@@ -1535,6 +1535,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
         setImageFile(null)
         setImagePreview(null)
         setNewProdImgs([null,null,null,null,null])
+        setNewStockMap({})
         alert('Produk berhasil ditambahkan!')
       } else {
         alert('Gagal tambah produk: '+(d.error||'Unknown error'))
@@ -1647,7 +1648,9 @@ function AdminInventory({products:initP}:{products:any[]}) {
                   <button key={sz} type="button" onClick={()=>{
                     const curr=newProd.sizes.split(',').map((s:string)=>s.trim()).filter(Boolean)
                     const next=curr.includes(sz)?curr.filter((s:string)=>s!==sz):[...curr,sz]
-                    setNewProd(p=>({...p,sizes:next.join(',')}))
+                    const newSizes=next.filter(Boolean)
+                    setNewProd(p=>({...p,sizes:newSizes.join(',')}))
+                    setNewStockMap(s=>{const ns={...s};newSizes.forEach((size:string)=>{if(!(size in ns))ns[size]=0});return ns})
                   }} style={{padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:600,cursor:'pointer',background:newProd.sizes.split(',').map((s:string)=>s.trim()).includes(sz)?C.g800:C.white,color:newProd.sizes.split(',').map((s:string)=>s.trim()).includes(sz)?'#fff':C.ink2,border:`1px solid ${newProd.sizes.split(',').map((s:string)=>s.trim()).includes(sz)?C.g800:C.ink5}`}}>{sz}</button>
                 ))}
               </div>
@@ -1664,11 +1667,11 @@ function AdminInventory({products:initP}:{products:any[]}) {
                 {newProd.sizes.split(',').map((s:string)=>s.trim()).filter(Boolean).map((sz:string)=>(
                   <div key={sz} style={{textAlign:'center'}}>
                     <label style={{display:'block',fontSize:10,fontWeight:700,color:C.ink4,marginBottom:4,textTransform:'uppercase'}}>{sz}</label>
-                    <input
-                      type="number" min={0} defaultValue={0}
-                      id={`stock-${sz}`}
-                      style={{width:'100%',padding:'7px 4px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:13,fontWeight:700,textAlign:'center',fontFamily:'inherit',outline:'none',color:C.ink,background:C.white}}
-                    />
+                    <div style={{display:'flex',alignItems:'center',border:`1.5px solid ${C.ink5}`,borderRadius:7,overflow:'hidden',background:C.white}}>
+                      <button type="button" onClick={()=>setNewStockMap(s=>({...s,[sz]:Math.max(0,(s[sz]||0)-1)}))} style={{width:22,background:'none',border:'none',cursor:'pointer',fontSize:14,color:C.ink2}}>−</button>
+                      <input type="number" min={0} value={newStockMap[sz]||0} onChange={e=>setNewStockMap(s=>({...s,[sz]:Math.max(0,parseInt(e.target.value)||0)}))} style={{flex:1,width:0,padding:'6px 0',border:'none',background:'transparent',fontSize:12,fontWeight:700,textAlign:'center',fontFamily:'inherit',outline:'none',color:C.ink}}/>
+                      <button type="button" onClick={()=>setNewStockMap(s=>({...s,[sz]:(s[sz]||0)+1}))} style={{width:22,background:'none',border:'none',cursor:'pointer',fontSize:14,color:C.ink2}}>+</button>
+                    </div>
                   </div>
                 ))}
               </div>
