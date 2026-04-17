@@ -1146,458 +1146,301 @@ function AdminOverview({products,orders,customers}:{products:any[],orders:any[],
 }
 
 function AdminOrders({orders:initO}:{orders:any[]}) {
-  const [orders,setOrders]=useState(initO)
-  useEffect(()=>{
-    fetch('/api/orders').then(r=>r.json()).then(d=>{if(d.data&&d.data.length>0)setOrders(d.data)}).catch(()=>{})
-  },[])
+  const [orders,setOrders]=useState<any[]>(initO)
   const [search,setSearch]=useState('')
-  const [filter,setFilter]=useState('all')
+  const [dateFrom,setDateFrom]=useState('')
+  const [dateTo,setDateTo]=useState('')
+  const [provSearch,setProvSearch]=useState('')
+  const [showProvDrop,setShowProvDrop]=useState(false)
+  const [filterProv,setFilterProv]=useState('')
+  const [filterPaid,setFilterPaid]=useState('all') // all/paid/unpaid
   const [selected,setSelected]=useState<any>(null)
+  const [resiInputs,setResiInputs]=useState<Record<string,string>>({})
+  const [resiSaved,setResiSaved]=useState<Record<string,string>>({})
+  const [printMode,setPrintMode]=useState<null|'packing'|'label'>(null)
+  const [manualProduct,setManualProduct]=useState('')
+
+  useEffect(()=>{
+    fetch('/api/orders').then(r=>r.json()).then(d=>{
+      if(d.data&&d.data.length>0) setOrders(d.data)
+    }).catch(()=>{})
+  },[])
+
+  const allProvs=useMemo(()=>Array.from(new Set(orders.map((o:any)=>o.province||o.address?.split(',').pop()?.trim()||''))).filter(Boolean).sort(),[orders])
+
   const filtered=useMemo(()=>{
     let o=[...orders].sort((a:any,b:any)=>new Date(b.date).getTime()-new Date(a.date).getTime())
-    if(search) o=o.filter((x:any)=>x.customerName.toLowerCase().includes(search.toLowerCase())||x.id.includes(search))
-    if(filter!=='all') o=o.filter((x:any)=>x.status===filter)
+    if(search) o=o.filter((x:any)=>(x.customerName||'').toLowerCase().includes(search.toLowerCase())||(x.id||'').toLowerCase().includes(search.toLowerCase())||(x.phone||'').includes(search))
+    if(dateFrom) o=o.filter((x:any)=>new Date(x.date)>=new Date(dateFrom))
+    if(dateTo) o=o.filter((x:any)=>new Date(x.date)<=new Date(dateTo+'T23:59:59'))
+    if(filterProv) o=o.filter((x:any)=>(x.province||x.address||'').toLowerCase().includes(filterProv.toLowerCase()))
+    if(filterPaid==='paid') o=o.filter((x:any)=>['processing','shipped','delivered'].includes(x.status))
+    if(filterPaid==='unpaid') o=o.filter((x:any)=>['pending','cancelled'].includes(x.status))
     return o
-  },[orders,search,filter])
-  function updateStatus(id:string,status:string){setOrders((o:any[])=>o.map((x:any)=>x.id===id?{...x,status}:x));if(selected?.id===id)setSelected((s:any)=>({...s,status}))}
-  return <div style={{display:'flex',gap:16,height:'calc(100vh - 120px)'}}>
-    <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:12}}>
-      <div style={{display:'flex',gap:9,flexWrap:'wrap'}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cari order atau customer…" style={{flex:1,minWidth:160,padding:'9px 13px',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',background:C.white,color:C.ink}}/>
-        <select value={filter} onChange={e=>setFilter(e.target.value)} style={{padding:'9px 13px',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',background:C.white,cursor:'pointer',color:C.ink2}}>
-          <option value="all">Semua Status</option>
-          {['pending','processing','shipped','delivered','cancelled'].map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
-        </select>
+  },[orders,search,dateFrom,dateTo,filterProv,filterPaid])
+
+  function updateStatus(id:string,status:string){
+    setOrders(prev=>prev.map((o:any)=>o.id===id?{...o,status}:o))
+    if(selected?.id===id) setSelected((s:any)=>({...s,status}))
+    fetch('/api/orders',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status})}).catch(()=>{})
+  }
+
+  function saveResi(id:string){
+    const resi=resiInputs[id]||''
+    if(!resi) return
+    setResiSaved(s=>({...s,[id]:resi}))
+    setOrders(prev=>prev.map((o:any)=>o.id===id?{...o,resi}:o))
+    if(selected?.id===id) setSelected((s:any)=>({...s,resi}))
+    fetch('/api/orders',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,resi})}).catch(()=>{})
+  }
+
+  const STATUS_ORDER=['pending','processing','shipped','delivered','cancelled','refund']
+  const STATUS_LABEL:Record<string,string>={pending:'Pending',processing:'Processing',shipped:'Shipped',delivered:'Done',cancelled:'Cancelled',refund:'Refund'}
+  const STATUS_COLOR:Record<string,string>={pending:C.amber,processing:C.blue,shipped:C.g500,delivered:C.g700,cancelled:C.red,refund:C.ink4}
+  const STATUS_BG:Record<string,string>={pending:C.amberBg,processing:C.blueBg,shipped:C.g50,delivered:'#D1FAE5',cancelled:C.redBg,refund:C.ink6}
+
+  function isPaid(o:any){return ['processing','shipped','delivered'].includes(o.status)}
+
+  // PRINT functions
+  function printPackingList(o:any){
+    const w=window.open('','_blank','width=600,height=800')!
+    w.document.write(`<!DOCTYPE html><html><head><title>Packing List ${o.id}</title>
+    <style>body{font-family:Arial,sans-serif;padding:24px;color:#000}h2{margin:0 0 4px}hr{border:1px dashed #ccc;margin:12px 0}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;font-size:13px}th{background:#f5f5f5}@media print{.no-print{display:none}}</style>
+    </head><body>
+    <h2>PACKING LIST — ${o.id}</h2>
+    <p style="font-size:12px;color:#666">Tanggal: ${new Date(o.date).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'})}</p>
+    <hr/>
+    <table><thead><tr><th>SKU</th><th>Nama Produk</th><th>Size</th><th>Warna</th><th>Qty</th></tr></thead>
+    <tbody>${(o.items||[]).map((item:any)=>`<tr><td>${item.sku||'-'}</td><td>${item.name}</td><td>${item.size||'-'}</td><td>${item.color||'-'}</td><td style="text-align:center;font-weight:bold">${item.qty||1}</td></tr>`).join('')}
+    </tbody></table>
+    <hr/>
+    <p style="font-size:11px;color:#888">Dicetak: ${new Date().toLocaleString('id-ID')}</p>
+    <button class="no-print" onclick="window.print()" style="margin-top:12px;padding:8px 20px;background:#1F3B24;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨️ Print</button>
+    </body></html>`)
+    w.document.close()
+  }
+
+  function printLabel(o:any){
+    const prod=manualProduct||(o.items||[]).map((i:any)=>`${i.name} (${i.size||''} ${i.color||''} x${i.qty||1})`).join(', ')
+    const w=window.open('','_blank','width=600,height=500')!
+    w.document.write(`<!DOCTYPE html><html><head><title>Label ${o.id}</title>
+    <style>body{font-family:Arial,sans-serif;padding:0;margin:0}
+    .label{width:10cm;min-height:7cm;border:2px solid #000;padding:14px;box-sizing:border-box;font-size:12px}
+    .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;border-bottom:2px solid #000;padding-bottom:8px}
+    .brand{font-size:15px;font-weight:bold}
+    .order-id{font-size:11px;background:#000;color:#fff;padding:3px 8px;border-radius:4px}
+    .section{margin:6px 0}
+    .label-title{font-size:9px;color:#666;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px}
+    .label-val{font-size:13px;font-weight:bold;color:#000}
+    .product-box{border:1px dashed #ccc;padding:6px;border-radius:4px;font-size:11px;margin-top:6px}
+    @media print{.no-print{display:none}}</style>
+    </head><body>
+    <div class="label">
+      <div class="header">
+        <span class="brand">THE ELITE ATHLETES</span>
+        <span class="order-id">${o.id}</span>
       </div>
-      <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,flex:1,overflowY:'auto'}}>
-        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
-          <thead><tr style={{background:C.cream,borderBottom:`1px solid ${C.ink6}`}}>{['Order ID','Customer','Tanggal','Total','Status','Ubah'].map(h=><th key={h} style={{padding:'10px 13px',textAlign:'left',fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.07em',textTransform:'uppercase',whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
-          <tbody>
-            {filtered.map((o:any,i:number)=>(
-              <tr key={o.id} onClick={()=>setSelected(o)} style={{borderBottom:`1px solid ${C.ink6}`,background:selected?.id===o.id?C.g50:i%2===0?C.white:C.cream,cursor:'pointer'}}>
-                <td style={{padding:'10px 13px',fontWeight:700,color:C.g700,fontSize:12}}>{o.id}</td>
-                <td style={{padding:'10px 13px',fontWeight:600,color:C.ink}}>{o.customer_name||o.customerName||'-'}</td>
-                <td style={{padding:'10px 13px',color:C.ink3,whiteSpace:'nowrap'}}>{fmtDate(o.date)}</td>
-                <td style={{padding:'10px 13px',fontWeight:700,color:C.ink}}>{fmt(o.total)}</td>
-                <td style={{padding:'10px 13px'}}><SBadge status={o.status}/></td>
-                <td style={{padding:'10px 13px'}}>
-                  <select onClick={e=>e.stopPropagation()} value={o.status} onChange={e=>{e.stopPropagation();updateStatus(o.id,e.target.value)}} disabled={!STATUS_FLOW[o.status]?.length} style={{padding:'4px 9px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:11,fontFamily:'inherit',cursor:'pointer',background:C.white,color:C.ink2,outline:'none'}}>
-                    <option value={o.status}>{o.status.charAt(0).toUpperCase()+o.status.slice(1)}</option>
-                    {(STATUS_FLOW[o.status]||[]).map((s:string)=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
-                  </select>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length===0&&<p style={{textAlign:'center',padding:36,color:C.ink4,fontSize:13}}>Tidak ada order</p>}
+      <div class="section">
+        <div class="label-title">Kepada / Tujuan</div>
+        <div class="label-val">${o.customerName}</div>
+        <div style="font-size:12px;margin-top:2px">${o.address||''}</div>
+        <div style="font-size:12px;font-weight:bold;margin-top:2px">📱 ${o.phone||'-'}</div>
+      </div>
+      <div style="border-top:1px dashed #ccc;margin:6px 0"></div>
+      <div class="section">
+        <div class="label-title">Pengirim</div>
+        <div class="label-val">The Elite Athletes</div>
+        <div style="font-size:11px">Tangerang Selatan, Banten</div>
+      </div>
+      <div class="product-box">
+        <span style="font-size:9px;color:#666">ISI PAKET:</span><br/>
+        ${prod}
       </div>
     </div>
-    {selected&&(
-      <div style={{width:280,flexShrink:0,background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,padding:18,overflowY:'auto',display:'flex',flexDirection:'column',gap:13}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}><div><p style={{margin:'0 0 2px',fontSize:14,fontWeight:700,color:C.ink}}>{selected.id}</p><p style={{margin:0,fontSize:11,color:C.ink4}}>{fmtDate(selected.date)}</p></div><SBadge status={selected.status}/></div>
-        <div style={{borderTop:`1px solid ${C.ink6}`,paddingTop:11}}>
-          <p style={{margin:'0 0 5px',fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.07em',textTransform:'uppercase'}}>Customer</p>
-          <p style={{margin:'0 0 2px',fontSize:13,fontWeight:700,color:C.ink}}>{selected.customer_name||selected.customerName||'-'}</p>
-          <p style={{margin:'0 0 2px',fontSize:12,color:C.ink3,lineHeight:1.5}}>{selected.address}</p>
-          <p style={{margin:0,fontSize:11,color:C.ink4}}>Bayar: {selected.payment_method||selected.payment||'-'}</p>
-        </div>
-        <div style={{borderTop:`1px solid ${C.ink6}`,paddingTop:11}}>
-          <p style={{margin:'0 0 8px',fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.07em',textTransform:'uppercase'}}>Items</p>
-          {selected.items.map((item:any,i:number)=>(
-            <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:`1px solid ${C.ink6}`}}>
-              <div><p style={{margin:'0 0 1px',fontSize:12,fontWeight:600,color:C.ink}}>{item.name}</p><p style={{margin:0,fontSize:10,color:C.ink4}}>Size {item.size} · Qty {item.qty}</p></div>
-              <p style={{margin:0,fontSize:12,fontWeight:700,color:C.g700}}>{fmt(item.price*item.qty)}</p>
-            </div>
-          ))}
-          <div style={{display:'flex',justifyContent:'space-between',paddingTop:9}}><span style={{fontSize:13,fontWeight:700,color:C.ink}}>Total</span><span style={{fontSize:14,fontWeight:800,color:C.g700}}>{fmt(selected.total)}</span></div>
-        </div>
-      </div>
-    )}
-  </div>
-}
-
-
-// ═══════════════════════════════════════════════════════════
-// SHARED PRODUCT FORM (used by Add + Edit)
-// ═══════════════════════════════════════════════════════════
-type PFData = {
-  sku:string; name:string; hargaAwal:string; disc:string; hargaJual:string; hpp:string;
-  weight:string; // berat dalam gram
-  desc:string; sport:string; gender:string; extraSports:string;
-  apparelColors:Record<string,string>; // size -> comma colors
-  footwearColors:Record<string,string>;
-  apparelOn:boolean; footwearOn:boolean;
-  imgs:(string|null)[]; sizeGuideImg:string|null;
-}
-type PFStock = Record<string,number> // "S-Black" -> qty
-
-function mkPFData(ep?:any):PFData {
-  // Build color map from existing stock keys like "S-Black"
-  const apparelSizes=['XS','S','M','L','XL','XXL','XXXL']
-  const footSizes=['36','37','38','39','40','41','42','43','44','45']
-  const apparelColors:Record<string,string>={}
-  const footwearColors:Record<string,string>={}
-  if(ep?.stock){
-    Object.keys(ep.stock).forEach((k:string)=>{
-      const [sz,...rest]=k.split('-')
-      const color=rest.join('-')
-      if(apparelSizes.includes(sz)) apparelColors[sz]=(apparelColors[sz]?apparelColors[sz]+',':'')+color
-      else if(footSizes.includes(sz)) footwearColors[sz]=(footwearColors[sz]?footwearColors[sz]+',':'')+color
-    })
-  }
-  const price=ep?.price||0
-  const original=ep?.original_price||ep?.original||0
-  const disc=original&&price?Math.round((1-price/original)*100):0
-  return {
-    sku:ep?.sku||'',name:ep?.name||'',
-    hargaAwal:String(original||''),disc:String(disc||''),
-    hargaJual:String(price||''),hpp:String(ep?.hpp||''),
-    desc:ep?.description||ep?.desc||'',
-    sport:ep?.sport||'Tennis',gender:ep?.gender||'Men',
-    extraSports:(ep?.tags||[]).join(', '),
-    apparelColors:Object.keys(apparelColors).length>0?apparelColors:{},
-    footwearColors:Object.keys(footwearColors).length>0?footwearColors:{},
-    apparelOn:ep?Object.keys(ep.stock||{}).some((k:string)=>['XS','S','M','L','XL','XXL','XXXL'].includes(k.split('-')[0])):true,
-    footwearOn:ep?Object.keys(ep.stock||{}).some((k:string)=>['36','37','38','39','40','41','42','43','44','45'].includes(k.split('-')[0])):false,
-    weight:String(ep?.weight||'500'),
-    imgs:[ep?.image_url||null,...(ep?.gallery||[null,null,null,null])].slice(0,5) as (string|null)[],
-    sizeGuideImg:ep?.size_guide_img||null,
-  }
-}
-
-function mkPFStock(ep?:any):PFStock {
-  if(!ep?.stock) return {}
-  // stock already keyed "S-Black" -> qty or just "S" -> qty
-  const res:PFStock={}
-  Object.entries(ep.stock).forEach(([k,v])=>{res[k]=v as number})
-  return res
-}
-
-function ProductForm({data,setData,stock,setStock,uploadFn,saving,onSave,onDelete,onCancel,isEdit}:{
-  data:PFData,setData:(d:PFData)=>void,
-  stock:PFStock,setStock:(s:PFStock)=>void,
-  uploadFn:(f:File,name:string)=>Promise<string|null>,
-  saving:boolean,onSave:()=>void,onDelete?:()=>void,onCancel:()=>void,isEdit:boolean
-}){
-  const [uploading,setUploading]=useState(false)
-  const [uploadingSG,setUploadingSG]=useState(false)
-  const [confirmDel,setConfirmDel]=useState(false)
-
-  const APPAREL=['XS','S','M','L','XL','XXL','XXXL']
-  const FOOTWEAR=['36','37','38','39','40','41','42','43','44','45']
-
-  // Auto-compute hargaJual from hargaAwal & disc
-  function onHargaAwalChange(val:string){
-    const ha=parseInt(val)||0
-    const d=parseInt(data.disc)||0
-    const hj=d>0?Math.round(ha*(1-d/100)):ha
-    setData({...data,hargaAwal:val,hargaJual:hj>0?String(hj):''})
-  }
-  function onDiscChange(val:string){
-    const ha=parseInt(data.hargaAwal)||0
-    const d=parseInt(val)||0
-    const hj=ha>0&&d>0?Math.round(ha*(1-d/100)):ha
-    setData({...data,disc:val,hargaJual:hj>0?String(hj):''})
+    <button class="no-print" onclick="window.print()" style="margin:12px;padding:8px 20px;background:#1F3B24;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨️ Print Label</button>
+    </body></html>`)
+    w.document.close()
   }
 
-  // Update stock when color string changes for a size
-  function updateColors(size:string,colorStr:string,isFootwear:boolean){
-    const newData={...data}
-    if(isFootwear) newData.footwearColors={...data.footwearColors,[size]:colorStr}
-    else newData.apparelColors={...data.apparelColors,[size]:colorStr}
-    setData(newData)
-    // Rebuild stock keys for this size
-    const newStock={...stock}
-    // Remove old keys for this size
-    Object.keys(newStock).forEach(k=>{if(k.startsWith(size+'-')||k===size)delete newStock[k]})
-    // Add new keys
-    const colors=colorStr.split(',').map(c=>c.trim()).filter(Boolean)
-    if(colors.length===0){
-      // no colors - single key
-    } else {
-      colors.forEach(c=>{const key=`${size}-${c}`;if(!(key in newStock))newStock[key]=0})
-    }
-    setStock(newStock)
-  }
-
-  function toggleSize(size:string,isFootwear:boolean){
-    const newData={...data}
-    const colorMap=isFootwear?{...data.footwearColors}:{...data.apparelColors}
-    const newStock={...stock}
-    if(size in colorMap){
-      // remove
-      delete colorMap[size]
-      Object.keys(newStock).forEach(k=>{if(k.startsWith(size+'-')||k===size)delete newStock[k]})
-    } else {
-      colorMap[size]=''
-    }
-    if(isFootwear) newData.footwearColors=colorMap
-    else newData.apparelColors=colorMap
-    setData(newData)
-    setStock(newStock)
-  }
-
-  const ha=parseInt(data.hargaAwal)||0
-  const hj=parseInt(data.hargaJual)||0
-  const hpp=parseInt(data.hpp)||0
-  const laba=hj-hpp
-  const labaPct=hj>0?Math.round(laba/hj*100):0
-
-  async function handleUploadImg(file:File,idx:number){
-    setUploading(true)
-    const url=await uploadFn(file,`${data.sku||'prod'}-img${idx}-${Date.now()}`)
-    if(url){const imgs=[...data.imgs];imgs[idx]=url;setData({...data,imgs})}
-    setUploading(false)
-  }
-  async function handleUploadSG(file:File){
-    setUploadingSG(true)
-    const url=await uploadFn(file,`${data.sku||'prod'}-sizeguide-${Date.now()}`)
-    if(url)setData({...data,sizeGuideImg:url})
-    setUploadingSG(false)
-  }
+  const provSuggestions=allProvs.filter(p=>p.toLowerCase().includes(provSearch.toLowerCase())).slice(0,8)
 
   return <div style={{display:'flex',flexDirection:'column',gap:14}}>
 
-    {/* ① FOTO PRODUK */}
-    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-      <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:10}}>① Foto Produk</label>
-      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-        {[0,1,2,3,4].map(i=>(
-          <div key={i} style={{display:'flex',flexDirection:'column',gap:4,alignItems:'center'}}>
-            <div style={{width:i===0?90:64,height:i===0?90:64,borderRadius:9,overflow:'hidden',border:`2px ${data.imgs[i]?'solid '+C.g300:'dashed '+C.ink5}`,background:C.white,display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
-              {data.imgs[i]
-                ?<><img src={data.imgs[i]!} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/><button type="button" onClick={()=>{const imgs=[...data.imgs];imgs[i]=null;setData({...data,imgs})}} style={{position:'absolute',top:2,right:2,width:15,height:15,borderRadius:'50%',background:C.red,color:'#fff',border:'none',cursor:'pointer',fontSize:8}}>✕</button></>
-                :<span style={{fontSize:i===0?24:18}}>📷</span>
-              }
-              {uploading&&<div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:9,color:'#fff'}}>⏳</span></div>}
-            </div>
-            <label style={{fontSize:9,color:C.g600,fontWeight:600,cursor:'pointer'}}>
-              {i===0?'Utama':`Det.${i}`}
-              <input type="file" accept="image/*" style={{display:'none'}} onChange={async e=>{const f=e.target.files?.[0];if(f)await handleUploadImg(f,i)}}/>
-            </label>
-          </div>
-        ))}
+    {/* FILTER BAR */}
+    <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,padding:'14px 16px',display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
+      <div style={{display:'flex',flexDirection:'column',gap:3,flex:2,minWidth:160}}>
+        <label style={{fontSize:10,fontWeight:600,color:C.ink4}}>Cari Order / Customer / HP</label>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="ORD-001 / Sarah / 08xx" style={{padding:'7px 11px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink}}/>
       </div>
-      <p style={{margin:'6px 0 0',fontSize:10,color:C.ink4}}>Utama tampil di catalog. Det.1–4 jadi carousel di halaman produk.</p>
-    </div>
-
-    {/* ② SKU + ③ NAMA PRODUK */}
-    <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:11}}>
-      <div style={{display:'flex',flexDirection:'column',gap:4}}>
-        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>② SKU *</label>
-        <input value={data.sku} onChange={e=>setData({...data,sku:e.target.value})} placeholder="TEA-TEN-001" disabled={isEdit} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:isEdit?C.ink4:C.ink,background:isEdit?C.cream:C.white}}/>
+      <div style={{display:'flex',flexDirection:'column',gap:3}}>
+        <label style={{fontSize:10,fontWeight:600,color:C.ink4}}>Dari Tanggal</label>
+        <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{padding:'7px 10px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink}}/>
       </div>
-      <div style={{display:'flex',flexDirection:'column',gap:4}}>
-        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>③ Nama Produk *</label>
-        <input value={data.name} onChange={e=>setData({...data,name:e.target.value})} placeholder="Court Precision Polo" style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+      <div style={{display:'flex',flexDirection:'column',gap:3}}>
+        <label style={{fontSize:10,fontWeight:600,color:C.ink4}}>Sampai Tanggal</label>
+        <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{padding:'7px 10px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink}}/>
       </div>
-    </div>
-
-    {/* ④ HARGA */}
-    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-      <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:10}}>④ Harga</label>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 1fr 1fr',gap:9,marginBottom:10}}>
-        {[
-          {label:'Harga Awal (Rp)',key:'hargaAwal',ph:'890000',fn:(v:string)=>onHargaAwalChange(v)},
-          {label:'Disc (%)',key:'disc',ph:'20',fn:(v:string)=>onDiscChange(v)},
-          {label:'Harga Jual (auto)',key:'hargaJual',ph:'712000',readOnly:true,fn:null},
-          {label:'HPP / Modal (Rp)',key:'hpp',ph:'280000',fn:(v:string)=>setData({...data,hpp:v})},
-        ].map(f=>(
-          <div key={f.key} style={{display:'flex',flexDirection:'column',gap:4}}>
-            <label style={{fontSize:10,fontWeight:600,color:C.ink4}}>{f.label}</label>
-            <input type="number" readOnly={!!f.readOnly} value={(data as any)[f.key]} onChange={e=>f.fn&&f.fn(e.target.value)} placeholder={f.ph} style={{padding:'8px 10px',border:`1px solid ${f.readOnly?C.g200:C.ink5}`,borderRadius:7,fontSize:13,fontFamily:'inherit',outline:'none',color:f.readOnly?C.g600:C.ink,background:f.readOnly?C.g50:C.white,fontWeight:f.readOnly?700:400}}/>
-          </div>
-        ))}
+      <div style={{display:'flex',flexDirection:'column',gap:3,position:'relative'}}>
+        <label style={{fontSize:10,fontWeight:600,color:C.ink4}}>Provinsi</label>
+        <input value={provSearch} onChange={e=>{setProvSearch(e.target.value);setShowProvDrop(true)}} onFocus={()=>setShowProvDrop(true)} placeholder="Ketik provinsi..." style={{padding:'7px 10px',border:`1px solid ${filterProv?C.g400:C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,width:140}}/>
+        {filterProv&&<button onClick={()=>{setFilterProv('');setProvSearch('')}} style={{position:'absolute',right:8,top:28,background:'none',border:'none',cursor:'pointer',fontSize:12,color:C.ink4}}>✕</button>}
+        {showProvDrop&&provSuggestions.length>0&&<div style={{position:'absolute',top:'100%',left:0,right:0,background:C.white,border:`1px solid ${C.ink5}`,borderRadius:8,zIndex:200,boxShadow:'0 6px 20px rgba(0,0,0,0.1)',maxHeight:160,overflowY:'auto'}}>
+          {provSuggestions.map(p=><div key={p} onClick={()=>{setFilterProv(p);setProvSearch(p);setShowProvDrop(false)}} style={{padding:'8px 12px',cursor:'pointer',fontSize:12,borderBottom:`1px solid ${C.ink6}`}} onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background=C.cream} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=''}>{p}</div>)}
+        </div>}
       </div>
-      {hj>0&&hpp>0&&<div style={{display:'flex',gap:14,padding:'8px 12px',background:laba>0?C.g50:C.redBg,borderRadius:8,border:`1px solid ${laba>0?C.g200:C.redLight}`}}>
-        <span style={{fontSize:12,color:C.ink3}}>Laba per unit:</span>
-        <span style={{fontSize:13,fontWeight:800,color:laba>0?C.g700:C.red}}>{fmt(laba)}</span>
-        <span style={{fontSize:11,color:laba>0?C.g500:C.red}}>({labaPct}% margin)</span>
-      </div>}
-    </div>
-
-    {/* SPORT & GENDER */}
-    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-      <div style={{display:'flex',flexDirection:'column',gap:4}}>
-        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Sport</label>
-        <select value={data.sport} onChange={e=>setData({...data,sport:e.target.value})} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}>
-          {['Tennis','Badminton','Padel','Hyrox','Gym','Running','Golf','Pilates','Yoga','Footwear','Aksesoris','Lainnya'].map(s=><option key={s}>{s}</option>)}
+      <div style={{display:'flex',flexDirection:'column',gap:3}}>
+        <label style={{fontSize:10,fontWeight:600,color:C.ink4}}>Status Bayar</label>
+        <select value={filterPaid} onChange={e=>setFilterPaid(e.target.value)} style={{padding:'7px 10px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,background:C.white}}>
+          <option value="all">Semua</option>
+          <option value="paid">Paid</option>
+          <option value="unpaid">Unpaid</option>
         </select>
       </div>
-      <div style={{display:'flex',flexDirection:'column',gap:4}}>
-        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Gender</label>
-        <select value={data.gender} onChange={e=>setData({...data,gender:e.target.value})} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}>
-          {['Men','Women','Unisex'].map(s=><option key={s}>{s}</option>)}
-        </select>
-      </div>
-    </div>
-    <div style={{display:'flex',flexDirection:'column',gap:4}}>
-      <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Sport Tambahan (pisahkan koma)</label>
-      <input value={data.extraSports} onChange={e=>setData({...data,extraSports:e.target.value})} placeholder="Gym, Running" style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+      {(search||dateFrom||dateTo||filterProv||filterPaid!=='all')&&<button onClick={()=>{setSearch('');setDateFrom('');setDateTo('');setFilterProv('');setProvSearch('');setFilterPaid('all')}} style={{padding:'7px 12px',background:C.cream,border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:11,fontWeight:600,color:C.ink3,cursor:'pointer',alignSelf:'flex-end'}}>Reset</button>}
     </div>
 
-    {/* ⑤ DESKRIPSI */}
-    <div style={{display:'flex',flexDirection:'column',gap:4}}>
-      <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>⑤ Deskripsi</label>
-      <textarea value={data.desc} onChange={e=>setData({...data,desc:e.target.value})} rows={3} placeholder="Deskripsi produk..." style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink,resize:'vertical'}}/>
+    {/* SUMMARY COUNTS */}
+    <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+      {[['Semua',orders.length,C.ink],['Pending',orders.filter((o:any)=>o.status==='pending').length,C.amber],['Processing',orders.filter((o:any)=>o.status==='processing').length,C.blue],['Shipped',orders.filter((o:any)=>o.status==='shipped').length,C.g500],['Done',orders.filter((o:any)=>o.status==='delivered').length,C.g700]].map(([l,v,col])=>(
+        <div key={String(l)} style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:9,padding:'8px 14px',textAlign:'center'}}>
+          <div style={{fontSize:18,fontWeight:800,color:String(col)}}>{v}</div>
+          <div style={{fontSize:10,color:C.ink4,fontWeight:600}}>{l}</div>
+        </div>
+      ))}
     </div>
 
-    {/* ⑥ SIZE GUIDE */}
-    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-      <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:8}}>⑥ Size Guide (upload gambar 1:1)</label>
-      <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
-        <div style={{width:80,height:80,borderRadius:9,overflow:'hidden',border:`2px ${data.sizeGuideImg?'solid '+C.g300:'dashed '+C.ink5}`,background:C.white,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-          {data.sizeGuideImg?<img src={data.sizeGuideImg} alt="size guide" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:24}}>📐</span>}
-        </div>
-        <div style={{flex:1}}>
-          <label style={{display:'block',padding:'8px 14px',background:uploadingSG?C.ink5:C.g800,color:'#fff',borderRadius:8,fontSize:12,fontWeight:600,cursor:uploadingSG?'not-allowed':'pointer',textAlign:'center',marginBottom:5}}>
-            {uploadingSG?'Uploading...':'📤 Upload Size Guide'}
-            <input type="file" accept="image/*" disabled={uploadingSG} style={{display:'none'}} onChange={async e=>{const f=e.target.files?.[0];if(f)handleUploadSG(f)}}/>
-          </label>
-          {data.sizeGuideImg&&<button type="button" onClick={()=>setData({...data,sizeGuideImg:null})} style={{width:'100%',padding:'5px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:11,color:C.red,cursor:'pointer'}}>Hapus</button>}
-        </div>
+    <div style={{display:'grid',gridTemplateColumns:selected?'1fr 380px':'1fr',gap:14,alignItems:'start'}}>
+      {/* ORDER TABLE */}
+      <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,overflow:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+          <thead><tr style={{background:C.g800,color:'#fff'}}>
+            {['Order ID','Tanggal','Customer','No HP','Total','Provinsi','Bayar','Resi / Tracking','Status Order'].map(h=><th key={h} style={{padding:'10px 12px',textAlign:'left',fontWeight:600,whiteSpace:'nowrap',fontSize:11}}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {filtered.map((o:any,idx:number)=>{
+              const paid=isPaid(o)
+              const resi=resiSaved[o.id]||o.resi||''
+              return <tr key={o.id} onClick={()=>setSelected(selected?.id===o.id?null:o)} style={{borderBottom:`1px solid ${C.ink6}`,background:selected?.id===o.id?C.g50:idx%2===0?C.white:C.cream,cursor:'pointer',transition:'background 0.15s'}}
+                onMouseEnter={e=>{if(selected?.id!==o.id)(e.currentTarget as HTMLElement).style.background=C.g50}}
+                onMouseLeave={e=>{if(selected?.id!==o.id)(e.currentTarget as HTMLElement).style.background=idx%2===0?C.white:C.cream}}>
+                <td style={{padding:'9px 12px',fontWeight:700,color:C.g700,whiteSpace:'nowrap'}}>{o.id}</td>
+                <td style={{padding:'9px 12px',color:C.ink3,whiteSpace:'nowrap'}}>{new Date(o.date).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'2-digit'})}</td>
+                <td style={{padding:'9px 12px',fontWeight:600,color:C.ink,whiteSpace:'nowrap'}}>{o.customerName}</td>
+                <td style={{padding:'9px 12px',whiteSpace:'nowrap'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <span style={{fontSize:11,color:C.ink3}}>{o.phone||'-'}</span>
+                    {o.phone&&<a href={`https://wa.me/62${(o.phone||'').replace(/^0/,'').replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:'flex',alignItems:'center',justifyContent:'center',width:22,height:22,borderRadius:5,background:'#25D366',color:'#fff',textDecoration:'none',fontSize:12,fontWeight:700,flexShrink:0}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                    </a>}
+                  </div>
+                </td>
+                <td style={{padding:'9px 12px',fontWeight:700,color:C.ink,whiteSpace:'nowrap'}}>{fmt(o.total)}</td>
+                <td style={{padding:'9px 12px',fontSize:11,color:C.ink3,maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.province||o.address?.split(',').pop()?.trim()||'-'}</td>
+                <td style={{padding:'9px 12px'}}>
+                  <span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:5,background:paid?'#D1FAE5':C.amberBg,color:paid?C.g700:C.amber,whiteSpace:'nowrap'}}>{paid?'PAID':'UNPAID'}</span>
+                </td>
+                <td style={{padding:'9px 12px',minWidth:180}} onClick={e=>e.stopPropagation()}>
+                  {resi
+                    ?<div style={{display:'flex',alignItems:'center',gap:6}}>
+                      <span style={{fontSize:11,fontWeight:700,color:C.g700}}>{resi}</span>
+                      <a href={`https://www.jne.co.id/id/tracking/trace/${resi}`} target="_blank" rel="noopener noreferrer" style={{fontSize:10,color:C.blue,fontWeight:600,textDecoration:'none',whiteSpace:'nowrap'}}>🔗 Track</a>
+                      <button onClick={()=>{setResiSaved(s=>{const n={...s};delete n[o.id];return n});setOrders(prev=>prev.map((x:any)=>x.id===o.id?{...x,resi:''}:x))}} style={{fontSize:9,color:C.ink4,background:'none',border:'none',cursor:'pointer'}}>✕</button>
+                    </div>
+                    :<div style={{display:'flex',gap:5}}>
+                      <input value={resiInputs[o.id]||''} onChange={e=>setResiInputs(s=>({...s,[o.id]:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveResi(o.id)}} placeholder="Ketik resi + Enter" style={{width:120,padding:'5px 8px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:11,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+                      <button onClick={()=>saveResi(o.id)} style={{padding:'5px 9px',background:C.g800,color:'#fff',border:'none',borderRadius:7,fontSize:10,fontWeight:700,cursor:'pointer'}}>✓</button>
+                    </div>
+                  }
+                </td>
+                <td style={{padding:'9px 12px'}} onClick={e=>e.stopPropagation()}>
+                  <select value={o.status} onChange={e=>updateStatus(o.id,e.target.value)} style={{padding:'5px 8px',border:`1px solid ${STATUS_COLOR[o.status]||C.ink5}`,borderRadius:7,fontSize:11,fontFamily:'inherit',outline:'none',background:STATUS_BG[o.status]||C.white,color:STATUS_COLOR[o.status]||C.ink,fontWeight:700,cursor:'pointer'}}>
+                    {STATUS_ORDER.map(s=><option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                  </select>
+                </td>
+              </tr>
+            })}
+          </tbody>
+        </table>
+        {filtered.length===0&&<div style={{padding:'32px',textAlign:'center',color:C.ink4}}><p style={{margin:0,fontSize:13}}>Tidak ada order ditemukan</p></div>}
       </div>
-    </div>
 
-    {/* ⑦ UKURAN BAJU */}
-    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:data.apparelOn?12:0}}>
-        <label style={{fontSize:12,fontWeight:700,color:C.ink3}}>⑦ Ukuran Baju (XS – XXXL)</label>
-        <div onClick={()=>setData({...data,apparelOn:!data.apparelOn})} style={{width:36,height:20,borderRadius:10,background:data.apparelOn?C.g600:C.ink5,position:'relative',cursor:'pointer',transition:'background 0.2s',flexShrink:0}}>
-          <div style={{position:'absolute',top:2,left:data.apparelOn?16:2,width:16,height:16,borderRadius:'50%',background:'#fff',transition:'left 0.2s'}}/>
-        </div>
-      </div>
-      {data.apparelOn&&<div style={{display:'flex',flexDirection:'column',gap:10}}>
-        {APPAREL.map(sz=>{
-          const checked=sz in data.apparelColors
-          const colorStr=data.apparelColors[sz]||''
-          const colors=colorStr.split(',').map(c=>c.trim()).filter(Boolean)
-          const stockKeys=colors.length>0?colors.map(c=>`${sz}-${c}`):[sz]
-          return <div key={sz} style={{background:C.white,borderRadius:9,padding:'10px 12px',border:`1px solid ${checked?C.g300:C.ink6}`}}>
-            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:checked?8:0}}>
-              <input type="checkbox" checked={checked} onChange={()=>toggleSize(sz,false)} style={{width:15,height:15,cursor:'pointer',accentColor:C.g700}}/>
-              <span style={{fontSize:13,fontWeight:700,color:checked?C.ink:C.ink4,minWidth:36}}>{sz}</span>
-              {checked&&<input value={colorStr} onChange={e=>updateColors(sz,e.target.value,false)} placeholder="Black, White, Navy" style={{flex:1,padding:'5px 9px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink}}/>}
-            </div>
-            {checked&&colors.length>0&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:7}}>
-              {colors.map(c=>{
-                const key=`${sz}-${c}`
-                return <div key={key} style={{display:'flex',alignItems:'center',gap:6,background:C.cream,borderRadius:7,padding:'5px 9px'}}>
-                  <span style={{fontSize:11,fontWeight:600,color:C.ink2,flex:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{sz} {c}</span>
-                  <button type="button" onClick={()=>setStock({...stock,[key]:Math.max(0,(stock[key]||0)-1)})} style={{width:20,height:20,borderRadius:4,background:C.ink6,border:'none',cursor:'pointer',fontSize:12,color:C.ink2,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
-                  <span style={{fontSize:12,fontWeight:700,color:C.ink,minWidth:20,textAlign:'center'}}>{stock[key]||0}</span>
-                  <button type="button" onClick={()=>setStock({...stock,[key]:(stock[key]||0)+1})} style={{width:20,height:20,borderRadius:4,background:C.g100,border:'none',cursor:'pointer',fontSize:12,color:C.g700,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
-                </div>
-              })}
-            </div>}
-            {checked&&colors.length===0&&<p style={{margin:0,fontSize:11,color:C.ink4,fontStyle:'italic'}}>Ketik warna di atas untuk menambah stok</p>}
+      {/* ORDER DETAIL PANEL */}
+      {selected&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,padding:'16px',display:'flex',flexDirection:'column',gap:14,position:'sticky',top:80}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+          <div>
+            <p style={{margin:'0 0 2px',fontSize:11,color:C.ink4,fontWeight:600,letterSpacing:'0.06em'}}>ORDER DETAIL</p>
+            <h3 style={{margin:0,fontSize:16,fontWeight:800,color:C.g700}}>{selected.id}</h3>
           </div>
-        })}
-      </div>}
-    </div>
-
-    {/* ⑧ UKURAN SEPATU */}
-    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:data.footwearOn?12:0}}>
-        <label style={{fontSize:12,fontWeight:700,color:C.ink3}}>⑧ Ukuran Kaki (36 – 45)</label>
-        <div onClick={()=>setData({...data,footwearOn:!data.footwearOn})} style={{width:36,height:20,borderRadius:10,background:data.footwearOn?C.g600:C.ink5,position:'relative',cursor:'pointer',transition:'background 0.2s',flexShrink:0}}>
-          <div style={{position:'absolute',top:2,left:data.footwearOn?16:2,width:16,height:16,borderRadius:'50%',background:'#fff',transition:'left 0.2s'}}/>
+          <button onClick={()=>setSelected(null)} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,color:C.ink4}}>✕</button>
         </div>
-      </div>
-      {data.footwearOn&&<div style={{display:'flex',flexDirection:'column',gap:10}}>
-        {FOOTWEAR.map(sz=>{
-          const checked=sz in data.footwearColors
-          const colorStr=data.footwearColors[sz]||''
-          const colors=colorStr.split(',').map(c=>c.trim()).filter(Boolean)
-          return <div key={sz} style={{background:C.white,borderRadius:9,padding:'10px 12px',border:`1px solid ${checked?C.g300:C.ink6}`}}>
-            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:checked?8:0}}>
-              <input type="checkbox" checked={checked} onChange={()=>toggleSize(sz,true)} style={{width:15,height:15,cursor:'pointer',accentColor:C.g700}}/>
-              <span style={{fontSize:13,fontWeight:700,color:checked?C.ink:C.ink4,minWidth:36}}>{sz}</span>
-              {checked&&<input value={colorStr} onChange={e=>updateColors(sz,e.target.value,true)} placeholder="Black, White, Navy" style={{flex:1,padding:'5px 9px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink}}/>}
-            </div>
-            {checked&&colors.length>0&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:7}}>
-              {colors.map(c=>{
-                const key=`${sz}-${c}`
-                return <div key={key} style={{display:'flex',alignItems:'center',gap:6,background:C.cream,borderRadius:7,padding:'5px 9px'}}>
-                  <span style={{fontSize:11,fontWeight:600,color:C.ink2,flex:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{sz} {c}</span>
-                  <button type="button" onClick={()=>setStock({...stock,[key]:Math.max(0,(stock[key]||0)-1)})} style={{width:20,height:20,borderRadius:4,background:C.ink6,border:'none',cursor:'pointer',fontSize:12,color:C.ink2,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
-                  <span style={{fontSize:12,fontWeight:700,color:C.ink,minWidth:20,textAlign:'center'}}>{stock[key]||0}</span>
-                  <button type="button" onClick={()=>setStock({...stock,[key]:(stock[key]||0)+1})} style={{width:20,height:20,borderRadius:4,background:C.g100,border:'none',cursor:'pointer',fontSize:12,color:C.g700,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
-                </div>
-              })}
-            </div>}
-            {checked&&colors.length===0&&<p style={{margin:0,fontSize:11,color:C.ink4,fontStyle:'italic'}}>Ketik warna di atas untuk menambah stok</p>}
+
+        {/* CUSTOMER INFO */}
+        <div style={{background:C.cream,borderRadius:10,padding:'12px 14px',display:'flex',flexDirection:'column',gap:7}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span style={{fontSize:12,fontWeight:700,color:C.ink}}>{selected.customerName}</span>
+            <span style={{fontSize:10,fontWeight:700,padding:'3px 9px',borderRadius:5,background:isPaid(selected)?'#D1FAE5':C.amberBg,color:isPaid(selected)?C.g700:C.amber}}>{isPaid(selected)?'PAID':'UNPAID'}</span>
           </div>
-        })}
+          {selected.phone&&<div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span style={{fontSize:12,color:C.ink3}}>📱 {selected.phone}</span>
+            <a href={`https://wa.me/62${(selected.phone||'').replace(/^0/,'').replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer" style={{display:'flex',alignItems:'center',gap:4,padding:'3px 9px',background:'#25D366',color:'#fff',borderRadius:6,fontSize:11,fontWeight:700,textDecoration:'none'}}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+              Chat WA
+            </a>
+          </div>}
+          <div style={{fontSize:11,color:C.ink3}}>📅 {new Date(selected.date).toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</div>
+          <div style={{fontSize:11,color:C.ink3}}>💳 Bayar via: <strong>{selected.payment||'-'}</strong></div>
+          <div style={{fontSize:11,color:C.ink3}}>📍 {selected.address||'-'}</div>
+          {selected.resi&&<div style={{fontSize:11,color:C.g600,fontWeight:600}}>📦 Resi: {selected.resi} · <a href={`https://www.jne.co.id/id/tracking/trace/${selected.resi}`} target="_blank" rel="noopener noreferrer" style={{color:C.blue}}>Track JNE →</a></div>}
+        </div>
+
+        {/* ITEMS */}
+        <div>
+          <p style={{margin:'0 0 8px',fontSize:11,fontWeight:700,color:C.ink4,letterSpacing:'0.06em',textTransform:'uppercase'}}>Item yang Dibeli</p>
+          {(selected.items||[]).map((item:any,i:number)=>(
+            <div key={i} style={{display:'flex',gap:10,padding:'9px 0',borderBottom:`1px solid ${C.ink6}`}}>
+              <div style={{width:44,height:44,borderRadius:8,overflow:'hidden',background:C.cream,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                {item.image_url?<img src={item.image_url} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:20}}>{item.emoji||'👕'}</span>}
+              </div>
+              <div style={{flex:1}}>
+                <p style={{margin:'0 0 2px',fontSize:12,fontWeight:700,color:C.ink}}>{item.name}</p>
+                <p style={{margin:'0 0 1px',fontSize:11,color:C.ink4}}>Size: <strong>{item.size||'-'}</strong> · Warna: <strong>{item.color||'-'}</strong></p>
+                <p style={{margin:0,fontSize:11,color:C.ink4}}>SKU: {item.sku||'-'} · Qty: <strong>{item.qty||1}</strong></p>
+              </div>
+              <span style={{fontSize:12,fontWeight:700,color:C.ink,whiteSpace:'nowrap'}}>{fmt((item.price||0)*(item.qty||1))}</span>
+            </div>
+          ))}
+          <div style={{display:'flex',justifyContent:'space-between',padding:'9px 0 0',borderTop:`1px solid ${C.ink}`,marginTop:2}}>
+            <span style={{fontSize:13,fontWeight:700,color:C.ink}}>Total</span>
+            <span style={{fontSize:15,fontWeight:800,color:C.g700}}>{fmt(selected.total)}</span>
+          </div>
+        </div>
+
+        {/* STATUS UPDATE */}
+        <div style={{display:'flex',flexDirection:'column',gap:6}}>
+          <label style={{fontSize:11,fontWeight:600,color:C.ink4}}>Update Status Order</label>
+          <select value={selected.status} onChange={e=>updateStatus(selected.id,e.target.value)} style={{padding:'9px 12px',border:`1px solid ${STATUS_COLOR[selected.status]||C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',background:STATUS_BG[selected.status]||C.white,color:STATUS_COLOR[selected.status]||C.ink,fontWeight:700,cursor:'pointer'}}>
+            {STATUS_ORDER.map(s=><option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+          </select>
+        </div>
+
+        {/* PRINT BUTTONS */}
+        <div style={{borderTop:`1px solid ${C.ink6}`,paddingTop:12,display:'flex',flexDirection:'column',gap:9}}>
+          <p style={{margin:'0 0 4px',fontSize:11,fontWeight:700,color:C.ink4,letterSpacing:'0.06em',textTransform:'uppercase'}}>Print</p>
+          <button onClick={()=>printPackingList(selected)} style={{padding:'9px',background:C.g50,border:`1px solid ${C.g200}`,borderRadius:9,fontSize:12,fontWeight:700,color:C.g700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:7}}>
+            📋 Print Packing List
+          </button>
+          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+            <textarea value={manualProduct} onChange={e=>setManualProduct(e.target.value)} placeholder="Override isi paket (opsional)..." rows={2} style={{padding:'8px 10px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:11,fontFamily:'inherit',outline:'none',color:C.ink,resize:'none'}}/>
+            <button onClick={()=>printLabel(selected)} style={{padding:'9px',background:C.g800,border:'none',borderRadius:9,fontSize:12,fontWeight:700,color:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:7}}>
+              🏷️ Print Label Paket
+            </button>
+          </div>
+          <p style={{margin:0,fontSize:10,color:C.ink4}}>Label berisi: Nama, Alamat, HP Customer + info pengirim. Bawa ke counter JNE untuk scan & kirim.</p>
+        </div>
       </div>}
-    </div>
-
-    {/* DELETE CONFIRM */}
-    {confirmDel&&onDelete&&<div style={{background:C.redBg,border:`1px solid ${C.redLight}`,borderRadius:10,padding:'12px 14px'}}>
-      <p style={{margin:'0 0 8px',fontSize:13,fontWeight:700,color:C.red}}>⚠️ Hapus produk ini?</p>
-      <div style={{display:'flex',gap:8}}>
-        <button onClick={()=>setConfirmDel(false)} style={{flex:1,padding:'8px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
-        <button onClick={onDelete} style={{flex:1,padding:'8px',background:C.red,color:'#fff',border:'none',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer'}}>Ya, Hapus</button>
-      </div>
-    </div>}
-
-    {/* ACTION BUTTONS */}
-    <div style={{display:'flex',gap:9,justifyContent:'space-between',paddingTop:4,borderTop:`1px solid ${C.ink6}`}}>
-      {isEdit&&onDelete
-        ?<button onClick={()=>setConfirmDel(true)} style={{padding:'10px 16px',background:C.redBg,border:`1px solid ${C.redLight}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.red,cursor:'pointer'}}>🗑️ Hapus</button>
-        :<div/>
-      }
-      <div style={{display:'flex',gap:9}}>
-        <button onClick={onCancel} style={{padding:'10px 18px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
-        <button onClick={onSave} disabled={saving} style={{padding:'10px 22px',background:saving?C.ink5:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:saving?'not-allowed':'pointer'}}>
-          {saving?'Menyimpan...':(isEdit?'Simpan Perubahan':'+ Tambah Produk')}
-        </button>
-      </div>
     </div>
   </div>
 }
-
-// ── EDIT MODAL ────────────────────────────────────────────
-function EditProductModal({product:ep,onSave,onDelete,onClose,uploadImageFn}:{product:any,onSave:(id:string,data:any)=>void,onDelete:(id:string)=>void,onClose:()=>void,uploadImageFn:(f:File,sku:string)=>Promise<string|null>}){
-  const [data,setData]=useState<PFData>(()=>mkPFData(ep))
-  const [stock,setStock]=useState<PFStock>(()=>mkPFStock(ep))
-  const [saving,setSaving]=useState(false)
-
-  async function handleSave(){
-    setSaving(true)
-    const allSizes=[...Object.keys(data.apparelColors),...Object.keys(data.footwearColors)]
-    const colorsArr=Array.from(new Set(Object.values({...data.apparelColors,...data.footwearColors}).join(',').split(',').map(c=>c.trim()).filter(Boolean)))
-    const payload={
-      name:data.name,price:parseInt(data.hargaJual)||0,
-      original:data.hargaAwal?parseInt(data.hargaAwal):null,
-      hpp:parseInt(data.hpp)||0,description:data.desc,
-      sport:data.sport,gender:data.gender,
-      tags:data.extraSports?data.extraSports.split(',').map((s:string)=>s.trim()).filter(Boolean):[],
-      sizes:allSizes,colors:colorsArr,
-      weight:parseInt(data.weight)||500,
-      image_url:data.imgs[0]||ep.image_url,
-      gallery:data.imgs.filter(Boolean),
-      size_guide_img:data.sizeGuideImg,
-      stock,
-    }
-    await fetch(`/api/products/${ep.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
-    onSave(ep.id,{...ep,...payload,stock})
-    setSaving(false)
-    onClose()
-  }
-
-  return <div style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',padding:12}}>
-    <div style={{background:C.white,borderRadius:16,width:'min(600px,98vw)',maxHeight:'92vh',overflowY:'auto',padding:'20px 22px'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-        <h3 style={{margin:0,fontSize:16,fontWeight:700,color:C.ink}}>Edit Produk</h3>
-        <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:18,color:C.ink3}}>✕</button>
-      </div>
-      <ProductForm data={data} setData={setData} stock={stock} setStock={setStock} uploadFn={uploadImageFn} saving={saving} onSave={handleSave} onDelete={()=>{fetch(`/api/products/${ep.id}`,{method:'DELETE'});onDelete(ep.id);onClose()}} onCancel={onClose} isEdit={true}/>
-    </div>
-  </div>
-}
-
 
 function AdminInventory({products:initP}:{products:any[]}) {
   const [products,setProducts]=useState(initP)
