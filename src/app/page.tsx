@@ -1228,57 +1228,365 @@ function AdminOrders({orders:initO}:{orders:any[]}) {
   </div>
 }
 
-function EditProductModal({product:ep,onSave,onDelete,onClose,uploadImageFn}:{product:any,onSave:(id:string,data:any)=>void,onDelete:(id:string)=>void,onClose:()=>void,uploadImageFn:(f:File,sku:string)=>Promise<string|null>}){
-  const sizesFromStock=Object.keys(ep.stock||{})
-  const [form,setForm]=useState({
-    name:ep.name||'',
-    sku:ep.sku||'',
-    price:String(ep.price||''),
-    original:String(ep.original||ep.original_price||''),
-    hpp:String(ep.hpp||''),
-    desc:ep.description||ep.desc||'',
-    sport:ep.sport||'Tennis',
-    gender:ep.gender||'Men',
-    extraSports:(ep.tags||[]).join(', '),
-    sizes:sizesFromStock.length>0?sizesFromStock.join(','):(ep.sizes||[]).join(','),
-    colors:(ep.colors||[]).join(','),
-    hasSizes:true,
-    hasColors:true,
-  })
-  const [stock,setStock]=useState<Record<string,number>>(()=>{
-    const s={...ep.stock}
-    // Pre-populate sizes from ep.sizes that might not be in stock
-    ;(ep.sizes||[]).forEach((sz:string)=>{if(!(sz in s))s[sz]=0})
-    return s
-  })
-  const gallery=ep.gallery&&Array.isArray(ep.gallery)?ep.gallery:[]
-  const [imgs,setImgs]=useState<(string|null)[]>([
-    ep.image_url||gallery[0]||null,
-    gallery[1]||null,
-    gallery[2]||null,
-    gallery[3]||null,
-    gallery[4]||null,
-  ])
+
+// ═══════════════════════════════════════════════════════════
+// SHARED PRODUCT FORM (used by Add + Edit)
+// ═══════════════════════════════════════════════════════════
+type PFData = {
+  sku:string; name:string; hargaAwal:string; disc:string; hargaJual:string; hpp:string;
+  desc:string; sport:string; gender:string; extraSports:string;
+  apparelColors:Record<string,string>; // size -> comma colors
+  footwearColors:Record<string,string>;
+  apparelOn:boolean; footwearOn:boolean;
+  imgs:(string|null)[]; sizeGuideImg:string|null;
+}
+type PFStock = Record<string,number> // "S-Black" -> qty
+
+function mkPFData(ep?:any):PFData {
+  // Build color map from existing stock keys like "S-Black"
+  const apparelSizes=['XS','S','M','L','XL','XXL','XXXL']
+  const footSizes=['36','37','38','39','40','41','42','43','44','45']
+  const apparelColors:Record<string,string>={}
+  const footwearColors:Record<string,string>={}
+  if(ep?.stock){
+    Object.keys(ep.stock).forEach((k:string)=>{
+      const [sz,...rest]=k.split('-')
+      const color=rest.join('-')
+      if(apparelSizes.includes(sz)) apparelColors[sz]=(apparelColors[sz]?apparelColors[sz]+',':'')+color
+      else if(footSizes.includes(sz)) footwearColors[sz]=(footwearColors[sz]?footwearColors[sz]+',':'')+color
+    })
+  }
+  const price=ep?.price||0
+  const original=ep?.original_price||ep?.original||0
+  const disc=original&&price?Math.round((1-price/original)*100):0
+  return {
+    sku:ep?.sku||'',name:ep?.name||'',
+    hargaAwal:String(original||''),disc:String(disc||''),
+    hargaJual:String(price||''),hpp:String(ep?.hpp||''),
+    desc:ep?.description||ep?.desc||'',
+    sport:ep?.sport||'Tennis',gender:ep?.gender||'Men',
+    extraSports:(ep?.tags||[]).join(', '),
+    apparelColors:Object.keys(apparelColors).length>0?apparelColors:{},
+    footwearColors:Object.keys(footwearColors).length>0?footwearColors:{},
+    apparelOn:ep?Object.keys(ep.stock||{}).some((k:string)=>['XS','S','M','L','XL','XXL','XXXL'].includes(k.split('-')[0])):true,
+    footwearOn:ep?Object.keys(ep.stock||{}).some((k:string)=>['36','37','38','39','40','41','42','43','44','45'].includes(k.split('-')[0])):false,
+    imgs:[ep?.image_url||null,...(ep?.gallery||[null,null,null,null])].slice(0,5) as (string|null)[],
+    sizeGuideImg:ep?.size_guide_img||null,
+  }
+}
+
+function mkPFStock(ep?:any):PFStock {
+  if(!ep?.stock) return {}
+  // stock already keyed "S-Black" -> qty or just "S" -> qty
+  const res:PFStock={}
+  Object.entries(ep.stock).forEach(([k,v])=>{res[k]=v as number})
+  return res
+}
+
+function ProductForm({data,setData,stock,setStock,uploadFn,saving,onSave,onDelete,onCancel,isEdit}:{
+  data:PFData,setData:(d:PFData)=>void,
+  stock:PFStock,setStock:(s:PFStock)=>void,
+  uploadFn:(f:File,name:string)=>Promise<string|null>,
+  saving:boolean,onSave:()=>void,onDelete?:()=>void,onCancel:()=>void,isEdit:boolean
+}){
   const [uploading,setUploading]=useState(false)
+  const [uploadingSG,setUploadingSG]=useState(false)
+  const [confirmDel,setConfirmDel]=useState(false)
+
+  const APPAREL=['XS','S','M','L','XL','XXL','XXXL']
+  const FOOTWEAR=['36','37','38','39','40','41','42','43','44','45']
+
+  // Auto-compute hargaJual from hargaAwal & disc
+  function onHargaAwalChange(val:string){
+    const ha=parseInt(val)||0
+    const d=parseInt(data.disc)||0
+    const hj=d>0?Math.round(ha*(1-d/100)):ha
+    setData({...data,hargaAwal:val,hargaJual:hj>0?String(hj):''})
+  }
+  function onDiscChange(val:string){
+    const ha=parseInt(data.hargaAwal)||0
+    const d=parseInt(val)||0
+    const hj=ha>0&&d>0?Math.round(ha*(1-d/100)):ha
+    setData({...data,disc:val,hargaJual:hj>0?String(hj):''})
+  }
+
+  // Update stock when color string changes for a size
+  function updateColors(size:string,colorStr:string,isFootwear:boolean){
+    const newData={...data}
+    if(isFootwear) newData.footwearColors={...data.footwearColors,[size]:colorStr}
+    else newData.apparelColors={...data.apparelColors,[size]:colorStr}
+    setData(newData)
+    // Rebuild stock keys for this size
+    const newStock={...stock}
+    // Remove old keys for this size
+    Object.keys(newStock).forEach(k=>{if(k.startsWith(size+'-')||k===size)delete newStock[k]})
+    // Add new keys
+    const colors=colorStr.split(',').map(c=>c.trim()).filter(Boolean)
+    if(colors.length===0){
+      // no colors - single key
+    } else {
+      colors.forEach(c=>{const key=`${size}-${c}`;if(!(key in newStock))newStock[key]=0})
+    }
+    setStock(newStock)
+  }
+
+  function toggleSize(size:string,isFootwear:boolean){
+    const newData={...data}
+    const colorMap=isFootwear?{...data.footwearColors}:{...data.apparelColors}
+    const newStock={...stock}
+    if(size in colorMap){
+      // remove
+      delete colorMap[size]
+      Object.keys(newStock).forEach(k=>{if(k.startsWith(size+'-')||k===size)delete newStock[k]})
+    } else {
+      colorMap[size]=''
+    }
+    if(isFootwear) newData.footwearColors=colorMap
+    else newData.apparelColors=colorMap
+    setData(newData)
+    setStock(newStock)
+  }
+
+  const ha=parseInt(data.hargaAwal)||0
+  const hj=parseInt(data.hargaJual)||0
+  const hpp=parseInt(data.hpp)||0
+  const laba=hj-hpp
+  const labaPct=hj>0?Math.round(laba/hj*100):0
+
+  async function handleUploadImg(file:File,idx:number){
+    setUploading(true)
+    const url=await uploadFn(file,`${data.sku||'prod'}-img${idx}-${Date.now()}`)
+    if(url){const imgs=[...data.imgs];imgs[idx]=url;setData({...data,imgs})}
+    setUploading(false)
+  }
+  async function handleUploadSG(file:File){
+    setUploadingSG(true)
+    const url=await uploadFn(file,`${data.sku||'prod'}-sizeguide-${Date.now()}`)
+    if(url)setData({...data,sizeGuideImg:url})
+    setUploadingSG(false)
+  }
+
+  return <div style={{display:'flex',flexDirection:'column',gap:14}}>
+
+    {/* ① FOTO PRODUK */}
+    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+      <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:10}}>① Foto Produk</label>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+        {[0,1,2,3,4].map(i=>(
+          <div key={i} style={{display:'flex',flexDirection:'column',gap:4,alignItems:'center'}}>
+            <div style={{width:i===0?90:64,height:i===0?90:64,borderRadius:9,overflow:'hidden',border:`2px ${data.imgs[i]?'solid '+C.g300:'dashed '+C.ink5}`,background:C.white,display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
+              {data.imgs[i]
+                ?<><img src={data.imgs[i]!} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/><button type="button" onClick={()=>{const imgs=[...data.imgs];imgs[i]=null;setData({...data,imgs})}} style={{position:'absolute',top:2,right:2,width:15,height:15,borderRadius:'50%',background:C.red,color:'#fff',border:'none',cursor:'pointer',fontSize:8}}>✕</button></>
+                :<span style={{fontSize:i===0?24:18}}>📷</span>
+              }
+              {uploading&&<div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:9,color:'#fff'}}>⏳</span></div>}
+            </div>
+            <label style={{fontSize:9,color:C.g600,fontWeight:600,cursor:'pointer'}}>
+              {i===0?'Utama':`Det.${i}`}
+              <input type="file" accept="image/*" style={{display:'none'}} onChange={async e=>{const f=e.target.files?.[0];if(f)await handleUploadImg(f,i)}}/>
+            </label>
+          </div>
+        ))}
+      </div>
+      <p style={{margin:'6px 0 0',fontSize:10,color:C.ink4}}>Utama tampil di catalog. Det.1–4 jadi carousel di halaman produk.</p>
+    </div>
+
+    {/* ② SKU + ③ NAMA PRODUK */}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:11}}>
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>② SKU *</label>
+        <input value={data.sku} onChange={e=>setData({...data,sku:e.target.value})} placeholder="TEA-TEN-001" disabled={isEdit} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:isEdit?C.ink4:C.ink,background:isEdit?C.cream:C.white}}/>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>③ Nama Produk *</label>
+        <input value={data.name} onChange={e=>setData({...data,name:e.target.value})} placeholder="Court Precision Polo" style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+      </div>
+    </div>
+
+    {/* ④ HARGA */}
+    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+      <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:10}}>④ Harga</label>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 1fr 1fr',gap:9,marginBottom:10}}>
+        {[
+          {label:'Harga Awal (Rp)',key:'hargaAwal',ph:'890000',fn:(v:string)=>onHargaAwalChange(v)},
+          {label:'Disc (%)',key:'disc',ph:'20',fn:(v:string)=>onDiscChange(v)},
+          {label:'Harga Jual (auto)',key:'hargaJual',ph:'712000',readOnly:true,fn:null},
+          {label:'HPP / Modal (Rp)',key:'hpp',ph:'280000',fn:(v:string)=>setData({...data,hpp:v})},
+        ].map(f=>(
+          <div key={f.key} style={{display:'flex',flexDirection:'column',gap:4}}>
+            <label style={{fontSize:10,fontWeight:600,color:C.ink4}}>{f.label}</label>
+            <input type="number" readOnly={!!f.readOnly} value={(data as any)[f.key]} onChange={e=>f.fn&&f.fn(e.target.value)} placeholder={f.ph} style={{padding:'8px 10px',border:`1px solid ${f.readOnly?C.g200:C.ink5}`,borderRadius:7,fontSize:13,fontFamily:'inherit',outline:'none',color:f.readOnly?C.g600:C.ink,background:f.readOnly?C.g50:C.white,fontWeight:f.readOnly?700:400}}/>
+          </div>
+        ))}
+      </div>
+      {hj>0&&hpp>0&&<div style={{display:'flex',gap:14,padding:'8px 12px',background:laba>0?C.g50:C.redBg,borderRadius:8,border:`1px solid ${laba>0?C.g200:C.redLight}`}}>
+        <span style={{fontSize:12,color:C.ink3}}>Laba per unit:</span>
+        <span style={{fontSize:13,fontWeight:800,color:laba>0?C.g700:C.red}}>{fmt(laba)}</span>
+        <span style={{fontSize:11,color:laba>0?C.g500:C.red}}>({labaPct}% margin)</span>
+      </div>}
+    </div>
+
+    {/* SPORT & GENDER */}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Sport</label>
+        <select value={data.sport} onChange={e=>setData({...data,sport:e.target.value})} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}>
+          {['Tennis','Badminton','Padel','Hyrox','Gym','Running','Golf','Pilates','Yoga','Footwear','Aksesoris','Lainnya'].map(s=><option key={s}>{s}</option>)}
+        </select>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Gender</label>
+        <select value={data.gender} onChange={e=>setData({...data,gender:e.target.value})} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}>
+          {['Men','Women','Unisex'].map(s=><option key={s}>{s}</option>)}
+        </select>
+      </div>
+    </div>
+    <div style={{display:'flex',flexDirection:'column',gap:4}}>
+      <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Sport Tambahan (pisahkan koma)</label>
+      <input value={data.extraSports} onChange={e=>setData({...data,extraSports:e.target.value})} placeholder="Gym, Running" style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+    </div>
+
+    {/* ⑤ DESKRIPSI */}
+    <div style={{display:'flex',flexDirection:'column',gap:4}}>
+      <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>⑤ Deskripsi</label>
+      <textarea value={data.desc} onChange={e=>setData({...data,desc:e.target.value})} rows={3} placeholder="Deskripsi produk..." style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink,resize:'vertical'}}/>
+    </div>
+
+    {/* ⑥ SIZE GUIDE */}
+    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+      <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:8}}>⑥ Size Guide (upload gambar 1:1)</label>
+      <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
+        <div style={{width:80,height:80,borderRadius:9,overflow:'hidden',border:`2px ${data.sizeGuideImg?'solid '+C.g300:'dashed '+C.ink5}`,background:C.white,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+          {data.sizeGuideImg?<img src={data.sizeGuideImg} alt="size guide" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:24}}>📐</span>}
+        </div>
+        <div style={{flex:1}}>
+          <label style={{display:'block',padding:'8px 14px',background:uploadingSG?C.ink5:C.g800,color:'#fff',borderRadius:8,fontSize:12,fontWeight:600,cursor:uploadingSG?'not-allowed':'pointer',textAlign:'center',marginBottom:5}}>
+            {uploadingSG?'Uploading...':'📤 Upload Size Guide'}
+            <input type="file" accept="image/*" disabled={uploadingSG} style={{display:'none'}} onChange={async e=>{const f=e.target.files?.[0];if(f)handleUploadSG(f)}}/>
+          </label>
+          {data.sizeGuideImg&&<button type="button" onClick={()=>setData({...data,sizeGuideImg:null})} style={{width:'100%',padding:'5px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:11,color:C.red,cursor:'pointer'}}>Hapus</button>}
+        </div>
+      </div>
+    </div>
+
+    {/* ⑦ UKURAN BAJU */}
+    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:data.apparelOn?12:0}}>
+        <label style={{fontSize:12,fontWeight:700,color:C.ink3}}>⑦ Ukuran Baju (XS – XXXL)</label>
+        <div onClick={()=>setData({...data,apparelOn:!data.apparelOn})} style={{width:36,height:20,borderRadius:10,background:data.apparelOn?C.g600:C.ink5,position:'relative',cursor:'pointer',transition:'background 0.2s',flexShrink:0}}>
+          <div style={{position:'absolute',top:2,left:data.apparelOn?16:2,width:16,height:16,borderRadius:'50%',background:'#fff',transition:'left 0.2s'}}/>
+        </div>
+      </div>
+      {data.apparelOn&&<div style={{display:'flex',flexDirection:'column',gap:10}}>
+        {APPAREL.map(sz=>{
+          const checked=sz in data.apparelColors
+          const colorStr=data.apparelColors[sz]||''
+          const colors=colorStr.split(',').map(c=>c.trim()).filter(Boolean)
+          const stockKeys=colors.length>0?colors.map(c=>`${sz}-${c}`):[sz]
+          return <div key={sz} style={{background:C.white,borderRadius:9,padding:'10px 12px',border:`1px solid ${checked?C.g300:C.ink6}`}}>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:checked?8:0}}>
+              <input type="checkbox" checked={checked} onChange={()=>toggleSize(sz,false)} style={{width:15,height:15,cursor:'pointer',accentColor:C.g700}}/>
+              <span style={{fontSize:13,fontWeight:700,color:checked?C.ink:C.ink4,minWidth:36}}>{sz}</span>
+              {checked&&<input value={colorStr} onChange={e=>updateColors(sz,e.target.value,false)} placeholder="Black, White, Navy" style={{flex:1,padding:'5px 9px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink}}/>}
+            </div>
+            {checked&&colors.length>0&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:7}}>
+              {colors.map(c=>{
+                const key=`${sz}-${c}`
+                return <div key={key} style={{display:'flex',alignItems:'center',gap:6,background:C.cream,borderRadius:7,padding:'5px 9px'}}>
+                  <span style={{fontSize:11,fontWeight:600,color:C.ink2,flex:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{sz} {c}</span>
+                  <button type="button" onClick={()=>setStock({...stock,[key]:Math.max(0,(stock[key]||0)-1)})} style={{width:20,height:20,borderRadius:4,background:C.ink6,border:'none',cursor:'pointer',fontSize:12,color:C.ink2,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+                  <span style={{fontSize:12,fontWeight:700,color:C.ink,minWidth:20,textAlign:'center'}}>{stock[key]||0}</span>
+                  <button type="button" onClick={()=>setStock({...stock,[key]:(stock[key]||0)+1})} style={{width:20,height:20,borderRadius:4,background:C.g100,border:'none',cursor:'pointer',fontSize:12,color:C.g700,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+                </div>
+              })}
+            </div>}
+            {checked&&colors.length===0&&<p style={{margin:0,fontSize:11,color:C.ink4,fontStyle:'italic'}}>Ketik warna di atas untuk menambah stok</p>}
+          </div>
+        })}
+      </div>}
+    </div>
+
+    {/* ⑧ UKURAN SEPATU */}
+    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:data.footwearOn?12:0}}>
+        <label style={{fontSize:12,fontWeight:700,color:C.ink3}}>⑧ Ukuran Kaki (36 – 45)</label>
+        <div onClick={()=>setData({...data,footwearOn:!data.footwearOn})} style={{width:36,height:20,borderRadius:10,background:data.footwearOn?C.g600:C.ink5,position:'relative',cursor:'pointer',transition:'background 0.2s',flexShrink:0}}>
+          <div style={{position:'absolute',top:2,left:data.footwearOn?16:2,width:16,height:16,borderRadius:'50%',background:'#fff',transition:'left 0.2s'}}/>
+        </div>
+      </div>
+      {data.footwearOn&&<div style={{display:'flex',flexDirection:'column',gap:10}}>
+        {FOOTWEAR.map(sz=>{
+          const checked=sz in data.footwearColors
+          const colorStr=data.footwearColors[sz]||''
+          const colors=colorStr.split(',').map(c=>c.trim()).filter(Boolean)
+          return <div key={sz} style={{background:C.white,borderRadius:9,padding:'10px 12px',border:`1px solid ${checked?C.g300:C.ink6}`}}>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:checked?8:0}}>
+              <input type="checkbox" checked={checked} onChange={()=>toggleSize(sz,true)} style={{width:15,height:15,cursor:'pointer',accentColor:C.g700}}/>
+              <span style={{fontSize:13,fontWeight:700,color:checked?C.ink:C.ink4,minWidth:36}}>{sz}</span>
+              {checked&&<input value={colorStr} onChange={e=>updateColors(sz,e.target.value,true)} placeholder="Black, White, Navy" style={{flex:1,padding:'5px 9px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink}}/>}
+            </div>
+            {checked&&colors.length>0&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:7}}>
+              {colors.map(c=>{
+                const key=`${sz}-${c}`
+                return <div key={key} style={{display:'flex',alignItems:'center',gap:6,background:C.cream,borderRadius:7,padding:'5px 9px'}}>
+                  <span style={{fontSize:11,fontWeight:600,color:C.ink2,flex:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{sz} {c}</span>
+                  <button type="button" onClick={()=>setStock({...stock,[key]:Math.max(0,(stock[key]||0)-1)})} style={{width:20,height:20,borderRadius:4,background:C.ink6,border:'none',cursor:'pointer',fontSize:12,color:C.ink2,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+                  <span style={{fontSize:12,fontWeight:700,color:C.ink,minWidth:20,textAlign:'center'}}>{stock[key]||0}</span>
+                  <button type="button" onClick={()=>setStock({...stock,[key]:(stock[key]||0)+1})} style={{width:20,height:20,borderRadius:4,background:C.g100,border:'none',cursor:'pointer',fontSize:12,color:C.g700,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+                </div>
+              })}
+            </div>}
+            {checked&&colors.length===0&&<p style={{margin:0,fontSize:11,color:C.ink4,fontStyle:'italic'}}>Ketik warna di atas untuk menambah stok</p>}
+          </div>
+        })}
+      </div>}
+    </div>
+
+    {/* DELETE CONFIRM */}
+    {confirmDel&&onDelete&&<div style={{background:C.redBg,border:`1px solid ${C.redLight}`,borderRadius:10,padding:'12px 14px'}}>
+      <p style={{margin:'0 0 8px',fontSize:13,fontWeight:700,color:C.red}}>⚠️ Hapus produk ini?</p>
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={()=>setConfirmDel(false)} style={{flex:1,padding:'8px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
+        <button onClick={onDelete} style={{flex:1,padding:'8px',background:C.red,color:'#fff',border:'none',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer'}}>Ya, Hapus</button>
+      </div>
+    </div>}
+
+    {/* ACTION BUTTONS */}
+    <div style={{display:'flex',gap:9,justifyContent:'space-between',paddingTop:4,borderTop:`1px solid ${C.ink6}`}}>
+      {isEdit&&onDelete
+        ?<button onClick={()=>setConfirmDel(true)} style={{padding:'10px 16px',background:C.redBg,border:`1px solid ${C.redLight}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.red,cursor:'pointer'}}>🗑️ Hapus</button>
+        :<div/>
+      }
+      <div style={{display:'flex',gap:9}}>
+        <button onClick={onCancel} style={{padding:'10px 18px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
+        <button onClick={onSave} disabled={saving} style={{padding:'10px 22px',background:saving?C.ink5:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:saving?'not-allowed':'pointer'}}>
+          {saving?'Menyimpan...':(isEdit?'Simpan Perubahan':'+ Tambah Produk')}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+// ── EDIT MODAL ────────────────────────────────────────────
+function EditProductModal({product:ep,onSave,onDelete,onClose,uploadImageFn}:{product:any,onSave:(id:string,data:any)=>void,onDelete:(id:string)=>void,onClose:()=>void,uploadImageFn:(f:File,sku:string)=>Promise<string|null>}){
+  const [data,setData]=useState<PFData>(()=>mkPFData(ep))
+  const [stock,setStock]=useState<PFStock>(()=>mkPFStock(ep))
   const [saving,setSaving]=useState(false)
-  const [confirmDelete,setConfirmDelete]=useState(false)
-  const stockTotal=Object.values(stock).reduce((s:number,n:number)=>s+(n as number),0)
 
   async function handleSave(){
     setSaving(true)
-    const sizesArr=form.sizes.split(',').map((s:string)=>s.trim()).filter(Boolean)
-    const colorsArr=form.colors.split(',').map((s:string)=>s.trim()).filter(Boolean)
-    const tagsArr=form.extraSports?form.extraSports.split(',').map((s:string)=>s.trim()).filter(Boolean):[]
+    const allSizes=[...Object.keys(data.apparelColors),...Object.keys(data.footwearColors)]
+    const colorsArr=Array.from(new Set(Object.values({...data.apparelColors,...data.footwearColors}).join(',').split(',').map(c=>c.trim()).filter(Boolean)))
     const payload={
-      name:form.name,price:parseInt(form.price),
-      original:form.original?parseInt(form.original):null,
-      hpp:parseInt(form.hpp)||0,
-      description:form.desc,
-      sport:form.sport,gender:form.gender,
-      tags:tagsArr,
-      sizes:sizesArr,colors:colorsArr,
-      image_url:imgs[0]||ep.image_url,
-      gallery:imgs.filter(Boolean),
+      name:data.name,price:parseInt(data.hargaJual)||0,
+      original:data.hargaAwal?parseInt(data.hargaAwal):null,
+      hpp:parseInt(data.hpp)||0,description:data.desc,
+      sport:data.sport,gender:data.gender,
+      tags:data.extraSports?data.extraSports.split(',').map((s:string)=>s.trim()).filter(Boolean):[],
+      sizes:allSizes,colors:colorsArr,
+      image_url:data.imgs[0]||ep.image_url,
+      gallery:data.imgs.filter(Boolean),
+      size_guide_img:data.sizeGuideImg,
       stock,
     }
     await fetch(`/api/products/${ep.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
@@ -1287,169 +1595,13 @@ function EditProductModal({product:ep,onSave,onDelete,onClose,uploadImageFn}:{pr
     onClose()
   }
 
-  async function handleDelete(){
-    await fetch(`/api/products/${ep.id}`,{method:'DELETE'})
-    onDelete(ep.id)
-    onClose()
-  }
-
   return <div style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',padding:12}}>
-    <div style={{background:C.white,borderRadius:16,width:'min(560px,98vw)',maxHeight:'92vh',overflowY:'auto',padding:'20px 22px',display:'flex',flexDirection:'column',gap:13}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <h3 style={{margin:0,fontSize:16,fontWeight:700,color:C.ink}}>Edit Produk — {ep.name}</h3>
+    <div style={{background:C.white,borderRadius:16,width:'min(600px,98vw)',maxHeight:'92vh',overflowY:'auto',padding:'20px 22px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <h3 style={{margin:0,fontSize:16,fontWeight:700,color:C.ink}}>Edit Produk</h3>
         <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:18,color:C.ink3}}>✕</button>
       </div>
-
-      {/* FOTO 5 SLOT */}
-      <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-        <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:10}}>Foto Produk</label>
-        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:6}}>
-          {[0,1,2,3,4].map(i=>(
-            <div key={i} style={{display:'flex',flexDirection:'column',gap:4,alignItems:'center'}}>
-              <div style={{width:i===0?90:64,height:i===0?90:64,borderRadius:9,overflow:'hidden',border:`2px ${imgs[i]?'solid '+C.g300:'dashed '+C.ink5}`,background:C.white,display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
-                {imgs[i]
-                  ?<><img src={imgs[i]!} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/><button type="button" onClick={()=>setImgs(a=>{const b=[...a];b[i]=null;return b})} style={{position:'absolute',top:2,right:2,width:15,height:15,borderRadius:'50%',background:C.red,color:'#fff',border:'none',cursor:'pointer',fontSize:8,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button></>
-                  :<span style={{fontSize:i===0?24:18}}>📷</span>
-                }
-              </div>
-              <label style={{fontSize:9,color:C.g600,fontWeight:600,cursor:'pointer',textAlign:'center'}}>
-                {i===0?'📌 Utama':`Det.${i}`}
-                <input type="file" accept="image/*" style={{display:'none'}} onChange={async e=>{
-                  const file=e.target.files?.[0];if(!file)return
-                  setUploading(true)
-                  const url=await uploadImageFn(file,ep.sku+'-img'+i)
-                  if(url)setImgs(a=>{const b=[...a];b[i]=url;return b})
-                  setUploading(false)
-                }}/>
-              </label>
-            </div>
-          ))}
-        </div>
-        {uploading&&<p style={{margin:0,fontSize:11,color:C.g500,fontWeight:600}}>⏳ Mengupload foto...</p>}
-        <p style={{margin:'4px 0 0',fontSize:10,color:C.ink4}}>Foto Utama tampil di catalog. Detail 1-4 tampil sebagai carousel di halaman produk.</p>
-      </div>
-
-      {/* FIELDS sama dengan Add Product */}
-      {[
-        {label:'Nama Produk *',key:'name',placeholder:'Court Precision Polo'},
-        {label:'SKU',key:'sku',placeholder:'TEA-TEN-001',disabled:true},
-        {label:'Harga Jual *',key:'price',placeholder:'649000',type:'number'},
-        {label:'Harga Asli / Sebelum Diskon',key:'original',placeholder:'890000',type:'number'},
-        {label:'HPP / Modal',key:'hpp',placeholder:'280000',type:'number'},
-        {label:'Deskripsi',key:'desc',placeholder:'Deskripsi singkat produk...'},
-        {label:'Sport Tambahan (opsional, pisahkan koma)',key:'extraSports',placeholder:'Gym, Running'},
-      ].map(f=>(
-        <div key={f.key} style={{display:'flex',flexDirection:'column',gap:4}}>
-          <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>{f.label}</label>
-          <input type={(f as any).type||'text'} disabled={(f as any).disabled} value={(form as any)[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:(f as any).disabled?C.ink4:C.ink,background:(f as any).disabled?C.cream:C.white}}/>
-        </div>
-      ))}
-
-      {/* DISCOUNT PREVIEW */}
-      {form.price&&form.original&&parseInt(form.original)>parseInt(form.price)&&(
-        <div style={{background:C.g50,border:`1px solid ${C.g200}`,borderRadius:9,padding:'10px 14px',display:'flex',alignItems:'center',gap:10}}>
-          <span style={{fontSize:13,fontWeight:700,color:C.g700}}>{fmt(parseInt(form.price))}</span>
-          <span style={{fontSize:12,color:C.ink4,textDecoration:'line-through'}}>{fmt(parseInt(form.original))}</span>
-          <span style={{fontSize:11,fontWeight:700,background:C.red,color:'#fff',padding:'2px 7px',borderRadius:5}}>-{Math.round((1-parseInt(form.price)/parseInt(form.original))*100)}% OFF</span>
-        </div>
-      )}
-
-      {/* SPORT & GENDER */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-        <div style={{display:'flex',flexDirection:'column',gap:4}}>
-          <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Sport</label>
-          <select value={form.sport} onChange={e=>setForm(p=>({...p,sport:e.target.value}))} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}>
-            {['Tennis','Badminton','Padel','Hyrox','Gym','Running','Golf','Pilates','Yoga','Footwear','Aksesoris','Lainnya'].map(s=><option key={s}>{s}</option>)}
-          </select>
-        </div>
-        <div style={{display:'flex',flexDirection:'column',gap:4}}>
-          <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Gender</label>
-          <select value={form.gender} onChange={e=>setForm(p=>({...p,gender:e.target.value}))} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}>
-            {['Men','Women','Unisex'].map(s=><option key={s}>{s}</option>)}
-          </select>
-        </div>
-      </div>
-
-      {/* UKURAN */}
-      <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-          <label style={{fontSize:12,fontWeight:700,color:C.ink3}}>Ukuran</label>
-        </div>
-        <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
-          {['All Size','XS','S','M','L','XL','XXL','XXXL','36','37','38','39','40','41','42','43','44','45'].map(sz=>{
-            const curr=form.sizes.split(',').map((s:string)=>s.trim())
-            const active=curr.includes(sz)
-            return <button key={sz} type="button" onClick={()=>{
-              const next=active?curr.filter((s:string)=>s!==sz):[...curr,sz]
-              const newSizes=next.filter(Boolean)
-              setForm(p=>({...p,sizes:newSizes.join(',')}))
-              // sync stock - add new sizes with 0, keep existing
-              setStock(s=>{const ns={...s};newSizes.forEach((size:string)=>{if(!(size in ns))ns[size]=0});return ns})
-            }} style={{padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:active?700:400,cursor:'pointer',background:active?C.g800:C.white,color:active?'#fff':C.ink2,border:`1px solid ${active?C.g800:C.ink5}`}}>{sz}</button>
-          })}
-        </div>
-        <input value={form.sizes} onChange={e=>setForm(p=>({...p,sizes:e.target.value}))} placeholder="Atau ketik manual: S,M,L,XL" style={{width:'100%',padding:'7px 10px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
-      </div>
-
-      {/* WARNA */}
-      <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-        <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:8}}>Warna</label>
-        <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
-          {['Black','White','Forest','Navy','Charcoal','Olive','Sage','Blush','Khaki','Cream','Sand','Red','Blue','Yellow','Pink','Purple','Grey','Brown'].map(cl=>{
-            const curr=form.colors.split(',').map((s:string)=>s.trim())
-            const active=curr.includes(cl)
-            return <button key={cl} type="button" onClick={()=>{
-              const next=active?curr.filter((s:string)=>s!==cl):[...curr,cl]
-              setForm(p=>({...p,colors:next.filter(Boolean).join(',')}))
-            }} style={{padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:active?700:400,cursor:'pointer',background:active?C.g800:C.white,color:active?'#fff':C.ink2,border:`1px solid ${active?C.g800:C.ink5}`}}>{cl}</button>
-          })}
-        </div>
-        <input value={form.colors} onChange={e=>setForm(p=>({...p,colors:e.target.value}))} placeholder="Atau ketik manual: Black,White" style={{width:'100%',padding:'7px 10px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
-      </div>
-
-      {/* STOK */}
-      <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-        <p style={{margin:'0 0 10px',fontSize:12,fontWeight:700,color:C.ink3}}>Stok per Ukuran</p>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(90px,1fr))',gap:9}}>
-          {Object.entries(stock).map(([sz,qty])=>(
-            <div key={sz} style={{textAlign:'center'}}>
-              <label style={{display:'block',fontSize:10,fontWeight:700,color:C.ink4,marginBottom:4,textTransform:'uppercase'}}>{sz}</label>
-              <div style={{display:'flex',alignItems:'center',border:`1.5px solid ${C.ink5}`,borderRadius:8,overflow:'hidden',background:C.white}}>
-                <button onClick={()=>setStock(s=>({...s,[sz]:Math.max(0,(s[sz]||0)-1)}))} style={{width:26,background:'none',border:'none',cursor:'pointer',fontSize:15,color:C.ink2}}>−</button>
-                <input type="number" min={0} value={qty as number} onFocus={e=>e.target.select()} onChange={e=>setStock(s=>({...s,[sz]:Math.max(0,parseInt(e.target.value)||0)}))} style={{flex:1,width:0,textAlign:'center',border:'none',background:'transparent',fontSize:13,fontWeight:700,color:C.ink,fontFamily:'inherit',outline:'none',padding:'6px 0'}}/>
-                <button onClick={()=>setStock(s=>({...s,[sz]:(s[sz]||0)+1}))} style={{width:26,background:'none',border:'none',cursor:'pointer',fontSize:15,color:C.ink2}}>+</button>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{marginTop:9,padding:'8px 10px',background:C.g50,borderRadius:7,display:'flex',justifyContent:'space-between'}}>
-          <span style={{fontSize:12,color:C.ink3}}>Total stok</span>
-          <span style={{fontSize:13,fontWeight:800,color:C.g700}}>{stockTotal} unit</span>
-        </div>
-      </div>
-
-      {/* DELETE CONFIRM */}
-      {confirmDelete&&(
-        <div style={{background:C.redBg,border:`1px solid ${C.redLight}`,borderRadius:10,padding:'12px 14px'}}>
-          <p style={{margin:'0 0 10px',fontSize:13,fontWeight:700,color:C.red}}>⚠️ Hapus produk "{ep.name}"?</p>
-          <p style={{margin:'0 0 12px',fontSize:12,color:C.red}}>Tindakan ini tidak bisa dibatalkan. Produk akan dihapus permanen.</p>
-          <div style={{display:'flex',gap:8}}>
-            <button onClick={()=>setConfirmDelete(false)} style={{flex:1,padding:'9px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
-            <button onClick={handleDelete} style={{flex:1,padding:'9px',background:C.red,color:'#fff',border:'none',borderRadius:8,fontSize:13,fontWeight:700,cursor:'pointer'}}>Ya, Hapus</button>
-          </div>
-        </div>
-      )}
-
-      {/* BUTTONS */}
-      <div style={{display:'flex',gap:9,justifyContent:'space-between',paddingTop:4,borderTop:`1px solid ${C.ink6}`}}>
-        <button onClick={()=>setConfirmDelete(true)} style={{padding:'10px 16px',background:C.redBg,border:`1px solid ${C.redLight}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.red,cursor:'pointer'}}>🗑️ Hapus Produk</button>
-        <div style={{display:'flex',gap:9}}>
-          <button onClick={onClose} style={{padding:'10px 18px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
-          <button onClick={handleSave} disabled={saving} style={{padding:'10px 22px',background:saving?C.ink5:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:saving?'not-allowed':'pointer'}}>
-            {saving?'Menyimpan...':'Simpan Perubahan'}
-          </button>
-        </div>
-      </div>
+      <ProductForm data={data} setData={setData} stock={stock} setStock={setStock} uploadFn={uploadImageFn} saving={saving} onSave={handleSave} onDelete={()=>{fetch(`/api/products/${ep.id}`,{method:'DELETE'});onDelete(ep.id);onClose()}} onCancel={onClose} isEdit={true}/>
     </div>
   </div>
 }
@@ -1470,12 +1622,8 @@ function AdminInventory({products:initP}:{products:any[]}) {
   const [statusF,setStatusF]=useState('all')
   const [editProd,setEditProd]=useState<any>(null)
   const [showAdd,setShowAdd]=useState(false)
-  const [newProd,setNewProd]=useState({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',original:'',emoji:'👕',sizes:'XS,S,M,L,XL,XXL,XXXL',colors:'Black,White',desc:'',extraSports:'',hasSizes:true,hasColors:true,sizeMode:'apparel'})
-  const [imageFile,setImageFile]=useState<File|null>(null)
-  const [imagePreview,setImagePreview]=useState<string|null>(null)
-  const [newProdImgs,setNewProdImgs]=useState<(string|null)[]>([null,null,null,null,null])
-  const [newStockMap,setNewStockMap]=useState<Record<string,number>>({})
-  const [uploadingImg,setUploadingImg]=useState(false)
+  const [addData,setAddData]=useState<PFData>(()=>mkPFData())
+  const [addStock,setAddStock]=useState<PFStock>({})
   const [previewImg,setPreviewImg]=useState<string|null>(null)
   const sports=['all',...new Set(products.map((p:any)=>p.sport))]
   const filtered=useMemo(()=>{
@@ -1513,192 +1661,45 @@ function AdminInventory({products:initP}:{products:any[]}) {
     }catch(e){console.error('Upload error:',e);return null}
   }
 
+  const [addSaving,setAddSaving]=useState(false)
   async function handleAddProduct(){
-    if(!newProd.name||!newProd.sku||!newProd.price){alert('Isi nama, SKU, dan harga dulu.');return}
+    if(!addData.name||!addData.sku||!addData.hargaJual){alert('Isi nama, SKU, dan harga dulu.');return}
+    setAddSaving(true)
     try{
-      const sizesArr=newProd.hasSizes?newProd.sizes.split(',').map((s:string)=>s.trim()).filter(Boolean):['One Size']
-      const colorsArr=newProd.hasColors?newProd.colors.split(',').map((s:string)=>s.trim()).filter(Boolean):['Default']
-      const tagsArr=newProd.extraSports?newProd.extraSports.split(',').map((s:string)=>s.trim()).filter(Boolean):[]
-      // Use state-based stock (NOT document.getElementById which is unreliable)
-      const imageUrl:string|null = (newProdImgs as any[])[0] || null
-      const galleryUrls=(newProdImgs as any[]).filter(Boolean)
+      const allSizes=[...Object.keys(addData.apparelColors),...Object.keys(addData.footwearColors)]
+      const colorsArr=Array.from(new Set(Object.values({...addData.apparelColors,...addData.footwearColors}).join(',').split(',').map((c:string)=>c.trim()).filter(Boolean)))
+      const tagsArr=addData.extraSports?addData.extraSports.split(',').map((s:string)=>s.trim()).filter(Boolean):[]
+      const imageUrl=addData.imgs[0]||null
+      const galleryUrls=addData.imgs.filter(Boolean)
       const res=await fetch('/api/products',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        name:newProd.name,sku:newProd.sku,sport:newProd.sport,gender:newProd.gender,
-        price:parseInt(newProd.price),hpp:parseInt(newProd.hpp)||0,
-        original:newProd.original?parseInt(newProd.original):null,
-        emoji:newProd.emoji,desc:newProd.desc,
-        sizes:sizesArr,colors:colorsArr,
+        name:addData.name,sku:addData.sku,sport:addData.sport,gender:addData.gender,
+        price:parseInt(addData.hargaJual)||0,hpp:parseInt(addData.hpp)||0,
+        original:addData.hargaAwal?parseInt(addData.hargaAwal):null,
+        desc:addData.desc,sizes:allSizes,colors:colorsArr,
         tags:tagsArr,image_url:imageUrl,gallery:galleryUrls,
-        initial_stock:newStockMap
+        size_guide_img:addData.sizeGuideImg,
+        initial_stock:addStock
       })})
       const d=await res.json()
       if(res.ok){
-        if(d.data) setProducts((p:any[])=>[...p,{...d.data,stock:{},status:'active',image_url:imageUrl}])
+        if(d.data) setProducts((p:any[])=>[...p,{...d.data,stock:addStock,status:'active',image_url:imageUrl}])
         setShowAdd(false)
-        setNewProd({name:'',sku:'',sport:'Tennis',gender:'Men',price:'',hpp:'',original:'',emoji:'👕',sizes:'XS,S,M,L,XL,XXL,XXXL',colors:'Black,White',desc:'',extraSports:'',hasSizes:true,hasColors:true,sizeMode:'apparel'})
-        setImageFile(null)
-        setImagePreview(null)
-        setNewProdImgs([null,null,null,null,null])
-        setNewStockMap({})
-        alert('Produk berhasil ditambahkan!')
-      } else {
-        alert('Gagal tambah produk: '+(d.error||'Unknown error'))
-      }
+        setAddData(mkPFData())
+        setAddStock({})
+      } else { alert('Gagal: '+(d.error||'Unknown')) }
     }catch(e:any){alert('Error: '+e.message)}
+    finally{setAddSaving(false)}
   }
 
   return <div style={{display:'flex',flexDirection:'column',gap:16}}>
     {editProd&&<EditProductModal product={editProd} onSave={saveProduct} onDelete={(id:string)=>setProducts((p:any[])=>p.filter((x:any)=>x.id!==id))} onClose={()=>setEditProd(null)} uploadImageFn={uploadImage}/>}
     {showAdd&&(
-      <div style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,0.35)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-        <div style={{background:C.white,borderRadius:16,width:'min(520px,95vw)',maxHeight:'90vh',overflowY:'auto',padding:'22px 24px',display:'flex',flexDirection:'column',gap:14}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h3 style={{margin:0,fontSize:16,fontWeight:700,color:C.ink}}>Tambah Produk Baru</h3><button onClick={()=>setShowAdd(false)} style={{background:'none',border:'none',cursor:'pointer',fontSize:18,color:C.ink3}}>✕</button></div>
-          {[
-            {label:'Nama Produk *',key:'name',placeholder:'Court Precision Polo'},
-            {label:'SKU *',key:'sku',placeholder:'TEA-TEN-011'},
-            {label:'Harga Jual *',key:'price',placeholder:'649000',type:'number'},
-            {label:'Harga Asli / Sebelum Diskon (opsional)',key:'original',placeholder:'890000',type:'number'},
-            {label:'HPP / Modal',key:'hpp',placeholder:'280000',type:'number'},
-
-            {label:'Deskripsi',key:'desc',placeholder:'Deskripsi singkat produk...'},
-            {label:'Sport Tambahan (opsional, pisahkan koma)',key:'extraSports',placeholder:'Gym, Running'},
-          ].map(f=>(
-            <div key={f.key} style={{display:'flex',flexDirection:'column',gap:4}}>
-              <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>{f.label}</label>
-              <input type={f.type||'text'} value={(newProd as any)[f.key]} placeholder={f.placeholder} onChange={e=>setNewProd(p=>({...p,[f.key]:e.target.value}))} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
-            </div>
-          ))}
-          {/* DISCOUNT PREVIEW */}
-          {newProd.price&&newProd.original&&parseInt(newProd.original)>parseInt(newProd.price)&&(
-            <div style={{background:C.g50,border:`1px solid ${C.g200}`,borderRadius:9,padding:'10px 14px',display:'flex',alignItems:'center',gap:10}}>
-              <span style={{fontSize:13,fontWeight:700,color:C.g700}}>{fmt(parseInt(newProd.price))}</span>
-              <span style={{fontSize:12,color:C.ink4,textDecoration:'line-through'}}>{fmt(parseInt(newProd.original))}</span>
-              <span style={{fontSize:11,fontWeight:700,background:C.red,color:'#fff',padding:'2px 7px',borderRadius:5}}>
-                -{Math.round((1-parseInt(newProd.price)/parseInt(newProd.original))*100)}% OFF
-              </span>
-            </div>
-          )}
-
-          {/* IMAGE UPLOAD - 5 slots */}
-          <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-            <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:10}}>Foto Produk</label>
-            <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:6}}>
-              {[0,1,2,3,4].map(i=>(
-                <div key={i} style={{display:'flex',flexDirection:'column',gap:4,alignItems:'center'}}>
-                  <div style={{width:i===0?90:64,height:i===0?90:64,borderRadius:9,overflow:'hidden',border:`2px ${newProdImgs[i]?'solid '+C.g300:'dashed '+C.ink5}`,background:C.white,display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
-                    {newProdImgs[i]
-                      ?<><img src={newProdImgs[i]!} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/><button type="button" onClick={()=>setNewProdImgs((a:any)=>{const b=[...a];b[i]=null;return b})} style={{position:'absolute',top:2,right:2,width:15,height:15,borderRadius:'50%',background:C.red,color:'#fff',border:'none',cursor:'pointer',fontSize:8,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button></>
-                      :<span style={{fontSize:i===0?24:18}}>📷</span>
-                    }
-                    {uploadingImg&&<div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:10,color:'#fff'}}>...</span></div>}
-                  </div>
-                  <label style={{fontSize:9,color:C.g600,fontWeight:600,cursor:'pointer',textAlign:'center'}}>
-                    {i===0?'📌 Utama':`Det.${i}`}
-                    <input type="file" accept="image/*" style={{display:'none'}} onChange={async e=>{
-                      const file=e.target.files?.[0];if(!file)return
-                      setUploadingImg(true)
-                      const url=await uploadImage(file,(newProd.sku||'product')+'-img'+i)
-                      if(url)setNewProdImgs((a:any)=>{const b=[...a];b[i]=url;return b})
-                      setUploadingImg(false)
-                    }}/>
-                  </label>
-                </div>
-              ))}
-            </div>
-            <p style={{margin:0,fontSize:10,color:C.ink4}}>Foto Utama tampil di catalog. Detail 1-4 tampil sebagai carousel di halaman produk. JPG/PNG/WebP, maks 5MB.</p>
-          </div>
-
-          {/* DISCOUNT PREVIEW */}
-          {newProd.price&&newProd.original&&parseInt(newProd.original)>parseInt(newProd.price)&&(
-            <div style={{background:C.g50,border:`1px solid ${C.g200}`,borderRadius:9,padding:'10px 14px',display:'flex',alignItems:'center',gap:10}}>
-              <span style={{fontSize:13,fontWeight:700,color:C.g700}}>{fmt(parseInt(newProd.price))}</span>
-              <span style={{fontSize:12,color:C.ink4,textDecoration:'line-through'}}>{fmt(parseInt(newProd.original))}</span>
-              <span style={{fontSize:11,fontWeight:700,background:C.red,color:'#fff',padding:'2px 7px',borderRadius:5}}>
-                -{Math.round((1-parseInt(newProd.price)/parseInt(newProd.original))*100)}% OFF
-              </span>
-            </div>
-          )}
-
-
-
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-            <div style={{display:'flex',flexDirection:'column',gap:4}}>
-              <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Sport</label>
-              <select value={newProd.sport} onChange={e=>setNewProd(p=>({...p,sport:e.target.value}))} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}>
-                {['Tennis','Badminton','Padel','Hyrox','Gym','Running','Golf','Pilates','Yoga','Footwear','Aksesoris','Lainnya'].map(s=><option key={s}>{s}</option>)}
-              </select>
-            </div>
-            <div style={{display:'flex',flexDirection:'column',gap:4}}>
-              <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Gender</label>
-              <select value={newProd.gender} onChange={e=>setNewProd(p=>({...p,gender:e.target.value}))} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}>
-                {['Men','Women','Unisex'].map(s=><option key={s}>{s}</option>)}
-              </select>
-            </div>
-          </div>
-          {/* UKURAN & STOK - 3 mode dengan toggle */}
-          <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-            <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:12}}>Ukuran & Stok Awal</label>
-            {/* MODE TOGGLES */}
-            <div style={{display:'flex',gap:7,marginBottom:14,flexWrap:'wrap'}}>
-              {[['none','Tidak Ada'],['apparel','Baju (XS–XXXL)'],['footwear','Sepatu (36–45)'],['custom','Satu Ukuran / Custom']].map(([mode,label])=>(
-                <button key={mode} type="button" onClick={()=>{
-                  const presets:Record<string,string>={none:'',apparel:'XS,S,M,L,XL,XXL,XXXL',footwear:'36,37,38,39,40,41,42,43,44,45',custom:'All Size'}
-                  const newSizes=presets[mode]
-                  setNewProd(p=>({...p,sizeMode:mode,hasSizes:mode!=='none',sizes:newSizes}))
-                  if(mode!=='none'){
-                    const arr=newSizes.split(',').filter(Boolean)
-                    setNewStockMap(s=>{const ns:Record<string,number>={};arr.forEach((sz:string)=>{ns[sz]=s[sz]||0});return ns})
-                  } else setNewStockMap({})
-                }} style={{padding:'6px 14px',borderRadius:8,fontSize:11,fontWeight:600,cursor:'pointer',background:(newProd as any).sizeMode===mode?C.g800:C.white,color:(newProd as any).sizeMode===mode?'#fff':C.ink2,border:`1px solid ${(newProd as any).sizeMode===mode?C.g800:C.ink5}`}}>{label}</button>
-              ))}
-            </div>
-            {/* STOCK INPUTS */}
-            {newProd.hasSizes&&newProd.sizes&&(
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(80px,1fr))',gap:8}}>
-                {newProd.sizes.split(',').map((s:string)=>s.trim()).filter(Boolean).map((sz:string)=>(
-                  <div key={sz} style={{textAlign:'center'}}>
-                    <label style={{display:'block',fontSize:10,fontWeight:700,color:C.ink4,marginBottom:4,textTransform:'uppercase'}}>{sz}</label>
-                    <div style={{display:'flex',alignItems:'center',border:`1.5px solid ${C.ink5}`,borderRadius:7,overflow:'hidden',background:C.white}}>
-                      <button type="button" onClick={()=>setNewStockMap(s=>({...s,[sz]:Math.max(0,(s[sz]||0)-1)}))} style={{width:22,background:'none',border:'none',cursor:'pointer',fontSize:14,color:C.ink2}}>−</button>
-                      <input type="number" min={0} value={newStockMap[sz]||0} onChange={e=>setNewStockMap(s=>({...s,[sz]:Math.max(0,parseInt(e.target.value)||0)}))} style={{flex:1,width:0,padding:'6px 0',border:'none',background:'transparent',fontSize:12,fontWeight:700,textAlign:'center',fontFamily:'inherit',outline:'none',color:C.ink}}/>
-                      <button type="button" onClick={()=>setNewStockMap(s=>({...s,[sz]:(s[sz]||0)+1}))} style={{width:22,background:'none',border:'none',cursor:'pointer',fontSize:14,color:C.ink2}}>+</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {!(newProd as any).sizeMode||((newProd as any).sizeMode==='none')&&<p style={{margin:0,fontSize:11,color:C.ink4}}>Produk tanpa pilihan ukuran (misal: aksesoris, tas)</p>}
-          </div>
-
-          {/* COLORS SECTION */}
-          <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:newProd.hasColors?10:0}}>
-              <label style={{fontSize:12,fontWeight:700,color:C.ink3}}>Warna</label>
-              <label style={{display:'flex',alignItems:'center',gap:7,cursor:'pointer'}}>
-                <div onClick={()=>setNewProd(p=>({...p,hasColors:!p.hasColors}))} style={{width:36,height:20,borderRadius:10,background:newProd.hasColors?C.g600:C.ink5,position:'relative',transition:'background 0.2s',cursor:'pointer'}}>
-                  <div style={{position:'absolute',top:2,left:newProd.hasColors?16:2,width:16,height:16,borderRadius:'50%',background:'#fff',transition:'left 0.2s'}}/>
-                </div>
-                <span style={{fontSize:11,color:C.ink3}}>{newProd.hasColors?'Aktif':'Tidak ada warna'}</span>
-              </label>
-            </div>
-            {newProd.hasColors&&<>
-              <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
-                {['Black','White','Forest','Navy','Charcoal','Olive','Sage','Blush','Khaki','Cream','Sand','Red','Blue','Yellow','Pink','Purple','Grey','Brown'].map(cl=>(
-                  <button key={cl} type="button" onClick={()=>{
-                    const curr=newProd.colors.split(',').map((s:string)=>s.trim()).filter(Boolean)
-                    const next=curr.includes(cl)?curr.filter((s:string)=>s!==cl):[...curr,cl]
-                    setNewProd(p=>({...p,colors:next.join(',')}))
-                  }} style={{padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:600,cursor:'pointer',background:newProd.colors.split(',').map((s:string)=>s.trim()).includes(cl)?C.g800:C.white,color:newProd.colors.split(',').map((s:string)=>s.trim()).includes(cl)?'#fff':C.ink2,border:`1px solid ${newProd.colors.split(',').map((s:string)=>s.trim()).includes(cl)?C.g800:C.ink5}`}}>{cl}</button>
-                ))}
-              </div>
-              <input value={newProd.colors} onChange={e=>setNewProd(p=>({...p,colors:e.target.value}))} placeholder="Atau ketik custom warna..." style={{width:'100%',padding:'8px 11px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box'}}/>
-            </>}
-          </div>
-          <div style={{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:`1px solid ${C.ink6}`}}>
-            <button onClick={()=>setShowAdd(false)} style={{padding:'9px 18px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
-            <button onClick={handleAddProduct} style={{padding:'9px 22px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>+ Tambah Produk</button>
-          </div>
+      <div style={{background:C.white,border:`1px solid ${C.ink5}`,borderRadius:16,padding:'18px 20px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+          <h3 style={{margin:0,fontSize:16,fontWeight:700,color:C.ink}}>Tambah Produk Baru</h3>
+          <button onClick={()=>setShowAdd(false)} style={{background:'none',border:'none',cursor:'pointer',fontSize:18,color:C.ink3}}>✕</button>
         </div>
+        <ProductForm data={addData} setData={setAddData} stock={addStock} setStock={setAddStock} uploadFn={uploadImage} saving={addSaving} onSave={handleAddProduct} onCancel={()=>setShowAdd(false)} isEdit={false}/>
       </div>
     )}
     <div style={{display:'flex',gap:9,flexWrap:'wrap',alignItems:'center'}}>
