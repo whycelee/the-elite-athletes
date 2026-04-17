@@ -61,11 +61,7 @@ const MONTH_ID: Record<string,string> = {Jan:'Januari',Feb:'Februari',Mar:'Maret
 const PPN = 0.11
 
 const SUPERIOR_PIN = '082505'
-const SHIPPING_OPTIONS = [
-  {id:'regular',label:'Regular Delivery',desc:'3–5 hari kerja',price:25000,icon:'📦'},
-  {id:'express',label:'Express Delivery',desc:'1–2 hari kerja',price:45000,icon:'⚡'},
-  {id:'same',label:'Same-Day',desc:'Hari ini (order <12:00)',price:75000,icon:'🚀'},
-]
+// SHIPPING_OPTIONS replaced by RajaOngkir API
 const PAYMENT_METHODS = [
   {id:'transfer',label:'Bank Transfer',icons:['BCA','BNI','Mandiri'],desc:'Virtual Account',icon:'🏦'},
   {id:'qris',label:'QRIS',icons:['GoPay','OVO','Dana'],desc:'Scan QR e-wallet',icon:'⬛'},
@@ -739,7 +735,7 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
   const [placing,setPlacing]=useState(false)
   const [confirmedOrder,setConfirmedOrder]=useState<any>(null)
   const subtotal=cart.reduce((s:number,i:any)=>s+i.price*(i.qty||1),0)
-  const shippingCost=SHIPPING_OPTIONS.find(o=>o.id===shippingData.shipping)?.price||0
+  const shippingCost=selectedService?.cost||0
   const discount=coupon==='ELITE20'?Math.round(subtotal*0.2):coupon==='MEMBER10'?Math.round(subtotal*0.1):0
   const total=subtotal+shippingCost-discount
   function applyCoupon(){const c=couponInput.trim().toUpperCase();if(['ELITE20','MEMBER10'].includes(c)){setCoupon(c);setCouponErr('')}else setCouponErr('Kode tidak valid')}
@@ -941,31 +937,69 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
             <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:13,padding:'18px 20px',display:'flex',flexDirection:'column',gap:13}}>
               <p style={{margin:'0 0 3px',fontSize:11,fontWeight:700,color:C.ink4,letterSpacing:'0.08em',textTransform:'uppercase'}}>Alamat Pengiriman</p>
               <Field label="Alamat Lengkap" id="addr" required placeholder="Jl. Sudirman No. 12, RT/RW 001/002" value={shippingData.address||''} onChange={(e:any)=>setShippingData((d:any)=>({...d,address:e.target.value}))}/>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-                <Field label="Kota" id="city" required placeholder="Jakarta Selatan" value={shippingData.city||''} onChange={(e:any)=>setShippingData((d:any)=>({...d,city:e.target.value}))}/>
-                <div style={{display:'flex',flexDirection:'column',gap:4}}>
-                  <label style={{fontSize:12,fontWeight:600,color:C.ink3,letterSpacing:'0.04em'}}>Provinsi <span style={{color:C.red}}>*</span></label>
-                  <select value={shippingData.province||''} onChange={(e:any)=>setShippingData((d:any)=>({...d,province:e.target.value}))} style={{padding:'10px 13px',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',background:C.white,cursor:'pointer',color:C.ink}}>
-                    <option value="">Pilih Provinsi</option>
-                    {PROVINCES.map(p=><option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
+              {/* RAJAONGKIR DESTINATION SEARCH */}
+              <div style={{position:'relative'}}>
+                <label style={{fontSize:12,fontWeight:600,color:C.ink3,display:'block',marginBottom:4}}>Kota / Kecamatan Tujuan <span style={{color:C.red}}>*</span></label>
+                <input value={destSearch} onChange={async e=>{
+                  const val=e.target.value
+                  setDestSearch(val)
+                  setSelectedDest(null)
+                  setJneServices([])
+                  setSelectedService(null)
+                  if(val.length<2){setDestResults([]);return}
+                  setDestLoading(true)
+                  try{
+                    const res=await fetch(`/api/destination?search=${encodeURIComponent(val)}`)
+                    const d=await res.json()
+                    setDestResults(d.data||[])
+                  }catch(e){}
+                  setDestLoading(false)
+                }} placeholder="Ketik nama kota/kecamatan..." style={{width:'100%',padding:'10px 13px',border:`1.5px solid ${selectedDest?C.g400:C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
+                {destLoading&&<div style={{position:'absolute',right:12,top:34,fontSize:11,color:C.ink4}}>🔍</div>}
+                {destResults.length>0&&!selectedDest&&<div style={{position:'absolute',top:'100%',left:0,right:0,background:C.white,border:`1px solid ${C.ink5}`,borderRadius:9,zIndex:200,boxShadow:'0 8px 24px rgba(0,0,0,0.1)',maxHeight:200,overflowY:'auto'}}>
+                  {destResults.map((r:any)=>(
+                    <div key={r.id} onClick={async()=>{
+                      setSelectedDest(r)
+                      setDestSearch(`${r.subdistrict_name}, ${r.city_name}, ${r.province_name}`)
+                      setDestResults([])
+                      setShippingData((d:any)=>({...d,city:r.city_name,province:r.province_name,destId:r.id}))
+                      // Fetch JNE rates
+                      setShippingLoading(true)
+                      try{
+                        const res=await fetch('/api/shipping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({destination:r.id,weight:cart.reduce((s:number,item:any)=>(s+(item.weight||500)*(item.qty||1)),0)})})
+                        const data=await res.json()
+                        setJneServices(data.data||[])
+                      }catch(e){}
+                      setShippingLoading(false)
+                    }} style={{padding:'10px 14px',cursor:'pointer',borderBottom:`1px solid ${C.ink6}`,fontSize:12}} onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background=C.cream} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=''}>
+                      <span style={{fontWeight:600,color:C.ink}}>{r.subdistrict_name}</span>
+                      <span style={{color:C.ink4}}>, {r.city_name}, {r.province_name}</span>
+                    </div>
+                  ))}
+                </div>}
+                {selectedDest&&<div style={{marginTop:6,fontSize:11,color:C.g600,fontWeight:600}}>✓ {selectedDest.subdistrict_name}, {selectedDest.city_name}</div>}
               </div>
             </div>
+            {/* JNE SERVICES */}
             <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:13,padding:'18px 20px',display:'flex',flexDirection:'column',gap:9}}>
-              <p style={{margin:'0 0 3px',fontSize:11,fontWeight:700,color:C.ink4,letterSpacing:'0.08em',textTransform:'uppercase'}}>Metode Pengiriman</p>
-              {SHIPPING_OPTIONS.map(opt=>(
-                <label key={opt.id} onClick={()=>setShippingData((d:any)=>({...d,shipping:opt.id}))} style={{display:'flex',alignItems:'center',gap:11,padding:'12px 14px',border:`1.5px solid ${shippingData.shipping===opt.id?C.g500:C.ink6}`,background:shippingData.shipping===opt.id?C.g50:C.white,borderRadius:11,cursor:'pointer',transition:'all 0.15s'}}>
-                  <div style={{width:17,height:17,borderRadius:'50%',border:`2px solid ${shippingData.shipping===opt.id?C.g600:C.ink4}`,background:shippingData.shipping===opt.id?C.g600:'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{shippingData.shipping===opt.id&&<div style={{width:6,height:6,borderRadius:'50%',background:'#fff'}}/>}</div>
-                  <span style={{fontSize:18}}>{opt.icon}</span>
-                  <div style={{flex:1}}><p style={{margin:'0 0 1px',fontSize:13,fontWeight:700,color:C.ink}}>{opt.label}</p><p style={{margin:0,fontSize:11,color:C.ink4}}>{opt.desc}</p></div>
-                  <span style={{fontSize:13,fontWeight:800,color:shippingData.shipping===opt.id?C.g700:C.ink}}>{fmt(opt.price)}</span>
+              <p style={{margin:'0 0 3px',fontSize:11,fontWeight:700,color:C.ink4,letterSpacing:'0.08em',textTransform:'uppercase'}}>Layanan JNE</p>
+              {!selectedDest&&<p style={{margin:0,fontSize:12,color:C.ink4,fontStyle:'italic'}}>Pilih kota tujuan dulu untuk melihat tarif JNE</p>}
+              {shippingLoading&&<div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:16,height:16,border:`2px solid ${C.g300}`,borderTopColor:C.g700,borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/><span style={{fontSize:12,color:C.ink4}}>Mengambil tarif JNE...</span></div>}
+              {jneServices.map((svc:any)=>(
+                <label key={svc.service} onClick={()=>{setSelectedService(svc);setShippingData((d:any)=>({...d,shipping:svc.service,shippingLabel:`JNE ${svc.service}`}))}} style={{display:'flex',alignItems:'center',gap:11,padding:'12px 14px',border:`1.5px solid ${selectedService?.service===svc.service?C.g500:C.ink6}`,background:selectedService?.service===svc.service?C.g50:C.white,borderRadius:11,cursor:'pointer',transition:'all 0.15s'}}>
+                  <div style={{width:17,height:17,borderRadius:'50%',border:`2px solid ${selectedService?.service===svc.service?C.g600:C.ink4}`,background:selectedService?.service===svc.service?C.g600:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>{selectedService?.service===svc.service&&<div style={{width:6,height:6,borderRadius:'50%',background:'#fff'}}/>}</div>
+                  <span style={{fontSize:16}}>📦</span>
+                  <div style={{flex:1}}>
+                    <p style={{margin:'0 0 1px',fontSize:13,fontWeight:700,color:C.ink}}>JNE {svc.service}</p>
+                    <p style={{margin:0,fontSize:11,color:C.ink4}}>{svc.description} · {svc.etd}</p>
+                  </div>
+                  <span style={{fontSize:13,fontWeight:800,color:selectedService?.service===svc.service?C.g700:C.ink}}>{fmt(svc.cost)}</span>
                 </label>
               ))}
             </div>
             <div style={{display:'flex',gap:11}}>
               <button onClick={()=>setStep(0)} style={{padding:'12px 20px',background:C.white,color:C.ink2,border:`1px solid ${C.ink5}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:'pointer'}}>← Back</button>
-              <button onClick={()=>{if(!shippingData.firstName||!shippingData.email||!shippingData.address||!shippingData.shipping){alert('Lengkapi semua field wajib.')}else{setStep(2)}}} style={{flex:1,padding:'12px',background:C.g800,color:'#fff',border:'none',borderRadius:10,fontSize:13,fontWeight:700,cursor:'pointer'}}>Lanjut ke Pembayaran →</button>
+              <button onClick={()=>{if(!shippingData.firstName||!shippingData.email||!shippingData.address||!selectedService||!selectedDest){alert('Lengkapi semua field wajib termasuk kota dan layanan pengiriman.')}else{setStep(2)}}} style={{flex:1,padding:'12px',background:C.g800,color:'#fff',border:'none',borderRadius:10,fontSize:13,fontWeight:700,cursor:'pointer'}}>Lanjut ke Pembayaran →</button>
             </div>
           </div>}
           {step===2&&<div style={{display:'flex',flexDirection:'column',gap:18}}>
@@ -999,7 +1033,7 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
             </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
               <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:11,padding:'13px 14px'}}><p style={{margin:'0 0 7px',fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.08em',textTransform:'uppercase'}}>Dikirim ke</p><p style={{margin:'0 0 2px',fontSize:12,fontWeight:700,color:C.ink}}>{shippingData.firstName} {shippingData.lastName}</p><p style={{margin:'0 0 2px',fontSize:11,color:C.ink3,lineHeight:1.5}}>{shippingData.address}</p><p style={{margin:0,fontSize:11,color:C.ink3}}>{shippingData.city}, {shippingData.province}</p></div>
-              <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:11,padding:'13px 14px'}}><p style={{margin:'0 0 7px',fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.08em',textTransform:'uppercase'}}>Pembayaran</p><p style={{margin:'0 0 3px',fontSize:12,fontWeight:700,color:C.ink}}>{PAYMENT_METHODS.find(p=>p.id===paymentMethod)?.icon} {PAYMENT_METHODS.find(p=>p.id===paymentMethod)?.label}</p><p style={{margin:0,fontSize:12,fontWeight:600,color:C.g700}}>📦 {SHIPPING_OPTIONS.find(o=>o.id===shippingData.shipping)?.label}</p></div>
+              <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:11,padding:'13px 14px'}}><p style={{margin:'0 0 7px',fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.08em',textTransform:'uppercase'}}>Pembayaran</p><p style={{margin:'0 0 3px',fontSize:12,fontWeight:700,color:C.ink}}>{PAYMENT_METHODS.find(p=>p.id===paymentMethod)?.icon} {PAYMENT_METHODS.find(p=>p.id===paymentMethod)?.label}</p><p style={{margin:0,fontSize:12,fontWeight:600,color:C.g700}}>📦 {shippingData.shippingLabel||'JNE'}</p></div>
             </div>
             <div style={{background:C.g50,border:`1px solid ${C.g100}`,borderRadius:11,padding:'12px 16px',display:'flex',gap:9}}><span style={{fontSize:15}}>🔒</span><p style={{margin:0,fontSize:12,color:C.g700,lineHeight:1.6}}>Dengan menekan "Place Order", kamu menyetujui Syarat & Ketentuan The Elite Athletes.</p></div>
             <div style={{display:'flex',gap:11}}>
@@ -1189,6 +1223,7 @@ function AdminOrders({orders:initO}:{orders:any[]}) {
 // ═══════════════════════════════════════════════════════════
 type PFData = {
   sku:string; name:string; hargaAwal:string; disc:string; hargaJual:string; hpp:string;
+  weight:string; // berat dalam gram
   desc:string; sport:string; gender:string; extraSports:string;
   apparelColors:Record<string,string>; // size -> comma colors
   footwearColors:Record<string,string>;
@@ -1225,6 +1260,7 @@ function mkPFData(ep?:any):PFData {
     footwearColors:Object.keys(footwearColors).length>0?footwearColors:{},
     apparelOn:ep?Object.keys(ep.stock||{}).some((k:string)=>['XS','S','M','L','XL','XXL','XXXL'].includes(k.split('-')[0])):true,
     footwearOn:ep?Object.keys(ep.stock||{}).some((k:string)=>['36','37','38','39','40','41','42','43','44','45'].includes(k.split('-')[0])):false,
+    weight:String(ep?.weight||'500'),
     imgs:[ep?.image_url||null,...(ep?.gallery||[null,null,null,null])].slice(0,5) as (string|null)[],
     sizeGuideImg:ep?.size_guide_img||null,
   }
@@ -1539,6 +1575,7 @@ function EditProductModal({product:ep,onSave,onDelete,onClose,uploadImageFn}:{pr
       sport:data.sport,gender:data.gender,
       tags:data.extraSports?data.extraSports.split(',').map((s:string)=>s.trim()).filter(Boolean):[],
       sizes:allSizes,colors:colorsArr,
+      weight:parseInt(data.weight)||500,
       image_url:data.imgs[0]||ep.image_url,
       gallery:data.imgs.filter(Boolean),
       size_guide_img:data.sizeGuideImg,
@@ -1632,6 +1669,7 @@ function AdminInventory({products:initP}:{products:any[]}) {
         original:addData.hargaAwal?parseInt(addData.hargaAwal):null,
         desc:addData.desc,sizes:allSizes,colors:colorsArr,
         tags:tagsArr,image_url:imageUrl,gallery:galleryUrls,
+        weight:parseInt(addData.weight)||500,
         size_guide_img:addData.sizeGuideImg,
         initial_stock:addStock
       })})
@@ -2331,6 +2369,7 @@ export default function App() {
           desc:p.description||p.desc||'',
           sizes:Array.isArray(p.sizes)?p.sizes:[],
           colors:Array.isArray(p.colors)?p.colors:[],
+          weight:p.weight||500,
           stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))
         }))
         setGlobalProducts(norm)
