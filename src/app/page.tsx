@@ -392,36 +392,17 @@ function AboutPage({nav,cartCount}:{nav:(p:string,d?:any)=>void,cartCount:number
   </div>
 }
 
-function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addToCart:(item:any)=>void,cartCount:number}) {
+function LandingPage({nav,addToCart,cartCount,products:extProducts}:{nav:(p:string,d?:any)=>void,addToCart:(item:any)=>void,cartCount:number,products?:any[]}) {
   const [scrolled,setScrolled]=useState(false)
   const [heroSlide,setHeroSlide]=useState(0)
   const [showCart,setShowCart]=useState(false)
   const [cart,setCart]=useState<any[]>([])
   const [toast,setToast]=useState<string|null>(null)
-  const [dbProducts,setDbProducts]=useState<any[]>(ALL_PRODUCTS)
+  const dbProducts=extProducts&&extProducts.length>0?extProducts:ALL_PRODUCTS
   useEffect(()=>{const fn=()=>setScrolled(window.scrollY>30);window.addEventListener('scroll',fn);return()=>window.removeEventListener('scroll',fn)},[])
   useEffect(()=>{
     const timer=setInterval(()=>setHeroSlide((s:number)=>(s+1)%5),5000)
     return()=>clearInterval(timer)
-  },[])
-  useEffect(()=>{
-    fetch('/api/products').then(r=>r.json()).then(d=>{
-      if(d.data&&d.data.length>0){
-        const norm=d.data.map((p:any)=>({
-          ...p,
-          original:p.original_price||p.original||null,
-          reviews:p.review_count||0,
-          sports:p.tags||[],
-          image_url:p.image_url||null,
-          gallery:Array.isArray(p.gallery)?p.gallery:[],
-          desc:p.description||p.desc||'',
-          sizes:Array.isArray(p.sizes)?p.sizes:[],
-          colors:Array.isArray(p.colors)?p.colors:[],
-          stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))
-        }))
-        setDbProducts(norm)
-      }
-    }).catch(()=>{})
   },[])
   function handleAdd(p:any){const item={...p,qty:1,size:(p.sizes&&p.sizes.length>0)?p.sizes[0]:'M',image_url:p.image_url||null};setCart(c=>[...c,item]);addToCart(item);setToast(p.name)}
   const cats=[{icon:'🎾',label:'Tennis',count:48},{icon:'🏸',label:'Badminton',count:22},{icon:'🏓',label:'Padel',count:36},{icon:'🏋️',label:'Hyrox',count:29},{icon:'💪',label:'Gym',count:112},{icon:'🏃',label:'Running',count:94},{icon:'⛳',label:'Golf',count:41},{icon:'🧘',label:'Pilates',count:33},{icon:'🪷',label:'Yoga',count:57},{icon:'👟',label:'Footwear',count:18},{icon:'🎒',label:'Aksesoris',count:24}]
@@ -476,7 +457,7 @@ function LandingPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
 // ═══════════════════════════════════════════════════════════
 // PAGE: CATALOG
 // ═══════════════════════════════════════════════════════════
-function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addToCart:(item:any)=>void,cartCount:number}) {
+function CatalogPage({nav,addToCart,cartCount,products:extProducts}:{nav:(p:string,d?:any)=>void,addToCart:(item:any)=>void,cartCount:number,products?:any[]}) {
   const [sports,setSports]=useState<string[]>([])
   const [genders,setGenders]=useState<string[]>([])
   const [priceR,setPriceR]=useState<string[]>([])
@@ -484,29 +465,8 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
   const [sortBy,setSortBy]=useState('newest')
   const [view,setView]=useState('grid')
   const [toast,setToast]=useState<string|null>(null)
-  const [allProducts,setAllProducts]=useState<any[]>(ALL_PRODUCTS)
-  const [loading,setLoading]=useState(true)
-  useEffect(()=>{
-    fetch('/api/products').then(r=>r.json()).then(d=>{
-      if(d.data&&d.data.length>0){
-        const norm=d.data.map((p:any)=>({
-          ...p,
-          sport:p.sport||'',
-          original:p.original_price||p.original||null,
-          reviews:p.review_count||0,
-          sports:Array.isArray(p.tags)?p.tags:[],
-          image_url:p.image_url||null,
-          gallery:Array.isArray(p.gallery)?p.gallery:[],
-          desc:p.description||p.desc||'',
-          sizes:Array.isArray(p.sizes)?p.sizes:[],
-          colors:Array.isArray(p.colors)?p.colors:[],
-          stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))
-        }))
-        setAllProducts(norm)
-      }
-      setLoading(false)
-    }).catch(()=>setLoading(false))
-  },[])
+  const allProducts=extProducts&&extProducts.length>0?extProducts:ALL_PRODUCTS
+  const loading=false
   const PRICE_RANGES=[{label:'< Rp 400K',min:0,max:400000},{label:'Rp 400K–600K',min:400000,max:600000},{label:'Rp 600K–800K',min:600000,max:800000},{label:'> Rp 800K',min:800000,max:Infinity}]
   const tog=(arr:string[],set:(a:string[])=>void,v:string)=>set(arr.includes(v)?arr.filter(x=>x!==v):[...arr,v])
   const filtered=useMemo(()=>{
@@ -612,7 +572,7 @@ function CatalogPage({nav,addToCart,cartCount}:{nav:(p:string,d?:any)=>void,addT
 // ═══════════════════════════════════════════════════════════
 // PAGE: PRODUCT DETAIL
 // ═══════════════════════════════════════════════════════════
-function DetailPage({product:p,nav,addToCart,cartCount}:{product:any,nav:(pg:string,d?:any)=>void,addToCart:(item:any)=>void,cartCount:number}) {
+function DetailPage({product:p,nav,addToCart,cartCount,allProducts:extAll}:{product:any,nav:(pg:string,d?:any)=>void,addToCart:(item:any)=>void,cartCount:number,allProducts?:any[]}) {
   const [selSize,setSelSize]=useState<string|null>(null)
   const [showSizeGuide,setShowSizeGuide]=useState(false)
   const [activeImg,setActiveImg]=useState<string|null>(null)
@@ -622,17 +582,12 @@ function DetailPage({product:p,nav,addToCart,cartCount}:{product:any,nav:(pg:str
   const [added,setAdded]=useState(false)
   const [toast,setToast]=useState<string|null>(null)
   const disc=p.original?Math.round((1-p.price/p.original)*100):null
-  const [related,setRelated]=useState<any[]>([])
-  useEffect(()=>{
-    fetch('/api/products').then(r=>r.json()).then(d=>{
-      if(d.data){
-        const norm=d.data.map((x:any)=>({...x,original:x.original_price||null,reviews:x.review_count||0,sports:x.tags||[],image_url:x.image_url||null,sizes:x.sizes||[],colors:x.colors||[],stock:Object.fromEntries((x.stock||[]).map((s:any)=>[s.size,s.quantity]))}))
-        const sameSportGender=norm.filter((x:any)=>x.sport===p.sport&&x.gender===p.gender&&x.id!==p.id)
-        const sameSportOnly=norm.filter((x:any)=>x.sport===p.sport&&x.gender!==p.gender&&x.id!==p.id)
-        setRelated([...sameSportGender,...sameSportOnly].slice(0,4))
-      }
-    }).catch(()=>{})
-  },[p.id])
+  const allProds=extAll&&extAll.length>0?extAll:ALL_PRODUCTS
+  const related=useMemo(()=>{
+    const sameSportGender=allProds.filter((x:any)=>x.sport===p.sport&&x.gender===p.gender&&x.id!==p.id)
+    const sameSportOnly=allProds.filter((x:any)=>x.sport===p.sport&&x.gender!==p.gender&&x.id!==p.id)
+    return [...sameSportGender,...sameSportOnly].slice(0,4)
+  },[allProds,p.id,p.sport,p.gender])
   const SWATCH:Record<string,string>={Forest:'#2D5134',White:'#F8F8F6',Navy:'#1B2A4A',Black:'#1C1C1A',Charcoal:'#3A3A3A',Olive:'#5A6045',Sage:'#7A9E7E',Blush:'#E8B4B8',Khaki:'#C3B89A',Cream:'#FAF8F4',Sand:'#D4C4A0'}
   function handleAdd(){if(!selSize){alert('Pilih ukuran terlebih dahulu.');return}addToCart({...p,qty,size:selSize,color:selColor});setAdded(true);setToast(p.name);setTimeout(()=>setAdded(false),2000)}
   return <div style={{background:C.cream,minHeight:'100vh'}}>
@@ -2341,6 +2296,8 @@ export default function App() {
   const [collapsed,  setCollapsed]  = useState(false)
   const [globalCart, setGlobalCart] = useState<any[]>([])
   const [cartCount,  setCartCount]  = useState(0)
+  const [globalProducts,setGlobalProducts]=useState<any[]>(ALL_PRODUCTS)
+  const [productsFetched,setProductsFetched]=useState(false)
 
   function nav(page: string, data?: any) {
     setRoute(page); setRouteData(data||null); window.scrollTo(0,0)
@@ -2353,14 +2310,33 @@ export default function App() {
         setRoute('admin')
       }
     }
-    // Ctrl+Shift+A = open admin
     const handler=(e:KeyboardEvent)=>{
-      if(e.ctrlKey&&e.shiftKey&&e.key==='A'){
-        setRoute('admin'); window.scrollTo(0,0)
-      }
+      if(e.ctrlKey&&e.shiftKey&&e.key==='A'){setRoute('admin');window.scrollTo(0,0)}
     }
     window.addEventListener('keydown',handler)
     return()=>window.removeEventListener('keydown',handler)
+  },[])
+  // Fetch products ONCE at app level - no per-page re-fetch
+  useEffect(()=>{
+    fetch('/api/products').then(r=>r.json()).then(d=>{
+      if(d.data&&d.data.length>0){
+        const norm=d.data.map((p:any)=>({
+          ...p,
+          sport:p.sport||'',
+          original:p.original_price||p.original||null,
+          reviews:p.review_count||0,
+          sports:Array.isArray(p.tags)?p.tags:[],
+          image_url:p.image_url||null,
+          gallery:Array.isArray(p.gallery)?p.gallery:[],
+          desc:p.description||p.desc||'',
+          sizes:Array.isArray(p.sizes)?p.sizes:[],
+          colors:Array.isArray(p.colors)?p.colors:[],
+          stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))
+        }))
+        setGlobalProducts(norm)
+      }
+      setProductsFetched(true)
+    }).catch(()=>setProductsFetched(true))
   },[])
   function addToCart(item: any) {
     setGlobalCart(c=>[...c,{...item,cartId:'c'+Date.now()}]); setCartCount(n=>n+1)
@@ -2397,11 +2373,11 @@ export default function App() {
       }
     `}</style>
 
-    {route==='home'    && <LandingPage  nav={nav} addToCart={addToCart} cartCount={cartCount}/>}
-    {route==='catalog' && <CatalogPage  nav={nav} addToCart={addToCart} cartCount={cartCount}/>}
+    {route==='home'    && <LandingPage  nav={nav} addToCart={addToCart} cartCount={cartCount} products={globalProducts}/>}
+    {route==='catalog' && <CatalogPage  nav={nav} addToCart={addToCart} cartCount={cartCount} products={globalProducts}/>}
     {route==='about'    && <AboutPage nav={nav} cartCount={globalCart.length}/>}
     {route==='athletes' && <OurAthletesPage nav={nav} cartCount={globalCart.length}/>}
-    {route==='detail'  && routeData && <DetailPage product={routeData} nav={nav} addToCart={addToCart} cartCount={cartCount}/>}
+    {route==='detail'  && routeData && <DetailPage product={routeData} nav={nav} addToCart={addToCart} cartCount={cartCount} allProducts={globalProducts}/>}
     {route==='checkout'&& <CheckoutPage nav={nav} cart={globalCart} addToCart={addToCart}/>}
 
     {route==='admin' && (
