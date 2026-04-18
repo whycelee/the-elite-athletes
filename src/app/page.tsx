@@ -734,6 +734,14 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
   const [couponErr,setCouponErr]=useState('')
   const [placing,setPlacing]=useState(false)
   const [confirmedOrder,setConfirmedOrder]=useState<any>(null)
+  // RajaOngkir states
+  const [destSearch,setDestSearch]=useState('')
+  const [destResults,setDestResults]=useState<any[]>([])
+  const [destLoading,setDestLoading]=useState(false)
+  const [selectedDest,setSelectedDest]=useState<any>(null)
+  const [jneServices,setJneServices]=useState<any[]>([])
+  const [shippingLoading,setShippingLoading]=useState(false)
+  const [selectedService,setSelectedService]=useState<any>(null)
   const subtotal=cart.reduce((s:number,i:any)=>s+i.price*(i.qty||1),0)
   const shippingCost=selectedService?.cost||0
   const discount=coupon==='ELITE20'?Math.round(subtotal*0.2):coupon==='MEMBER10'?Math.round(subtotal*0.1):0
