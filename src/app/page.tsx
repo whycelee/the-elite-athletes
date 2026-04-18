@@ -964,13 +964,13 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
                     setDestResults(d.data||[])
                   }catch(e){}
                   setDestLoading(false)
-                }} placeholder="Ketik nama kota/kecamatan..." style={{width:'100%',padding:'10px 13px',border:`1.5px solid ${selectedDest?C.g400:C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
+                }} placeholder="Ketik kecamatan atau kota... (min 2 huruf)" style={{width:'100%',padding:'10px 13px',border:`1.5px solid ${selectedDest?C.g400:C.ink5}`,borderRadius:9,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
                 {destLoading&&<div style={{position:'absolute',right:12,top:34,fontSize:11,color:C.ink4}}>🔍</div>}
-                {destResults.length>0&&!selectedDest&&<div style={{position:'absolute',top:'100%',left:0,right:0,background:C.white,border:`1px solid ${C.ink5}`,borderRadius:9,zIndex:200,boxShadow:'0 8px 24px rgba(0,0,0,0.1)',maxHeight:200,overflowY:'auto'}}>
+                {destResults.length>0&&!selectedDest&&<div style={{position:'absolute',top:'100%',left:0,right:0,background:C.white,border:`1px solid ${C.ink5}`,borderRadius:9,zIndex:200,boxShadow:'0 8px 24px rgba(0,0,0,0.1)',maxHeight:280,overflowY:'auto'}}>
                   {destResults.map((r:any)=>(
                     <div key={r.id} onClick={async()=>{
                       setSelectedDest(r)
-                      setDestSearch(`${r.subdistrict_name}, ${r.city_name}, ${r.province_name}`)
+                      setDestSearch(`${r.subdistrict_name}, ${r.city_name}`)
                       setDestResults([])
                       setShippingData((d:any)=>({...d,city:r.city_name,province:r.province_name,destId:r.id}))
                       // Fetch JNE rates
@@ -981,9 +981,9 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
                         setJneServices(data.data||[])
                       }catch(e){}
                       setShippingLoading(false)
-                    }} style={{padding:'10px 14px',cursor:'pointer',borderBottom:`1px solid ${C.ink6}`,fontSize:12}} onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background=C.cream} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=''}>
-                      <span style={{fontWeight:600,color:C.ink}}>{r.subdistrict_name}</span>
-                      <span style={{color:C.ink4}}>, {r.city_name}, {r.province_name}</span>
+                    }} style={{padding:'9px 14px',cursor:'pointer',borderBottom:`1px solid ${C.ink6}`}} onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background=C.cream} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=''}>
+                      <div style={{fontWeight:600,color:C.ink,fontSize:13}}>{r.subdistrict_name}</div>
+                      <div style={{color:C.ink4,fontSize:11}}>{r.city_name} · {r.province_name}</div>
                     </div>
                   ))}
                 </div>}
@@ -1171,6 +1171,22 @@ function AdminOrders({orders:initO,products:allProds=[]}:{orders:any[],products?
   const [resiSaved,setResiSaved]=useState<Record<string,string>>({})
   const [printMode,setPrintMode]=useState<null|'packing'|'label'>(null)
   const [manualProduct,setManualProduct]=useState('')
+  const [trackingData,setTrackingData]=useState<any>(null)
+  const [trackingLoading,setTrackingLoading]=useState(false)
+  const [trackingResi,setTrackingResi]=useState('')
+
+  async function fetchTracking(resi:string){
+    if(!resi)return
+    setTrackingLoading(true)
+    setTrackingResi(resi)
+    setTrackingData(null)
+    try{
+      const res=await fetch(`/api/tracking?awb=${encodeURIComponent(resi)}&courier=jne`)
+      const d=await res.json()
+      setTrackingData(d)
+    }catch(e){setTrackingData({error:'Gagal mengambil data tracking'})}
+    setTrackingLoading(false)
+  }
 
   useEffect(()=>{
   },[]) // orders pre-loaded from App level
@@ -1352,7 +1368,7 @@ function AdminOrders({orders:initO,products:allProds=[]}:{orders:any[],products?
                   {resi
                     ?<div style={{display:'flex',alignItems:'center',gap:6}}>
                       <span style={{fontSize:11,fontWeight:700,color:C.g700}}>{resi}</span>
-                      <a href={`https://www.jne.co.id/id/tracking/trace/${resi}`} target="_blank" rel="noopener noreferrer" style={{fontSize:10,color:C.blue,fontWeight:600,textDecoration:'none',whiteSpace:'nowrap'}}>🔗 Track</a>
+                      <button onClick={()=>fetchTracking(resi)} style={{fontSize:10,color:C.blue,fontWeight:600,background:'none',border:'none',cursor:'pointer',padding:0,whiteSpace:'nowrap'}}>📍 Track</button>
                       <button onClick={()=>{setResiSaved(s=>{const n={...s};delete n[o.id];return n});setOrders(prev=>prev.map((x:any)=>x.id===o.id?{...x,resi:''}:x))}} style={{fontSize:9,color:C.ink4,background:'none',border:'none',cursor:'pointer'}}>✕</button>
                     </div>
                     :<div style={{display:'flex',gap:5}}>
@@ -1399,7 +1415,40 @@ function AdminOrders({orders:initO,products:allProds=[]}:{orders:any[],products?
           <div style={{fontSize:11,color:C.ink3}}>📅 {(selected.date&&!isNaN(new Date(selected.date).getTime())?new Date(selected.date).toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}):'-')}</div>
           <div style={{fontSize:11,color:C.ink3}}>💳 Bayar via: <strong>{selected.payment||'-'}</strong>{selected.paid_at&&<span style={{fontSize:10,color:C.g500,marginLeft:8}}>✓ Lunas {new Date(selected.paid_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>}</div>
           <div style={{fontSize:11,color:C.ink3}}>📍 {selected.address||'-'}</div>
-          {selected.resi&&<div style={{fontSize:11,color:C.g600,fontWeight:600}}>📦 Resi: {selected.resi} · <a href={`https://www.jne.co.id/id/tracking/trace/${selected.resi}`} target="_blank" rel="noopener noreferrer" style={{color:C.blue}}>Track JNE →</a></div>}
+          {selected.resi&&<div style={{fontSize:11,color:C.g600,fontWeight:600,display:'flex',alignItems:'center',gap:8}}>
+            📦 Resi: {selected.resi}
+            <button onClick={()=>fetchTracking(selected.resi)} style={{fontSize:10,color:C.white,fontWeight:700,background:C.g700,border:'none',borderRadius:6,padding:'3px 9px',cursor:'pointer'}}>📍 Cek Tracking</button>
+          </div>}
+          {/* TRACKING PANEL */}
+          {(trackingLoading||trackingData)&&trackingResi&&<div style={{background:C.g50,border:`1px solid ${C.g200}`,borderRadius:10,padding:'12px 14px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+              <span style={{fontSize:11,fontWeight:700,color:C.g700}}>📍 Tracking {trackingResi}</span>
+              <button onClick={()=>{setTrackingData(null);setTrackingResi('')}} style={{background:'none',border:'none',cursor:'pointer',fontSize:12,color:C.ink4}}>✕</button>
+            </div>
+            {trackingLoading&&<div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:14,height:14,border:`2px solid ${C.g300}`,borderTopColor:C.g700,borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/><span style={{fontSize:11,color:C.ink4}}>Mengambil data...</span></div>}
+            {trackingData?.error&&<p style={{margin:0,fontSize:11,color:C.red}}>{trackingData.error}</p>}
+            {trackingData?.data&&<>
+              <div style={{background:C.white,borderRadius:8,padding:'8px 10px',marginBottom:8,fontSize:11}}>
+                <div style={{fontWeight:700,color:C.ink,marginBottom:2}}>{trackingData.data.summary?.courier_name} — {trackingData.data.summary?.status}</div>
+                <div style={{color:C.ink3}}>Dari: {trackingData.data.summary?.origin||'-'} → {trackingData.data.summary?.destination||'-'}</div>
+                {trackingData.data.delivery_status?.pod_receiver&&<div style={{color:C.g700,fontWeight:600,marginTop:3}}>✓ Diterima: {trackingData.data.delivery_status.pod_receiver}</div>}
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:6,maxHeight:200,overflowY:'auto'}}>
+                {(trackingData.data.manifest||trackingData.data.track||[]).slice(0,8).map((m:any,i:number)=>(
+                  <div key={i} style={{display:'flex',gap:9,paddingBottom:6,borderBottom:`1px solid ${C.ink6}`}}>
+                    <div style={{flexShrink:0,display:'flex',flexDirection:'column',alignItems:'center'}}>
+                      <div style={{width:8,height:8,borderRadius:'50%',background:i===0?C.g600:C.ink5,flexShrink:0,marginTop:2}}/>
+                      {i<(trackingData.data.manifest||trackingData.data.track||[]).slice(0,8).length-1&&<div style={{width:1,height:'100%',background:C.ink6,margin:'3px 0'}}/>}
+                    </div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:10,color:C.ink4}}>{m.city_name||m.date} {m.manifest_time||m.time}</div>
+                      <div style={{fontSize:11,color:C.ink,fontWeight:i===0?600:400}}>{m.manifest_description||m.status||m.location}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>}
+          </div>}
         </div>
 
         {/* ITEMS */}

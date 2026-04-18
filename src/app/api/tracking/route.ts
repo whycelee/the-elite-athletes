@@ -5,12 +5,14 @@ const RAJAONGKIR_KEY = process.env.RAJAONGKIR_API_KEY!
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
-    const search = searchParams.get('search') || ''
-    if (search.length < 2) return NextResponse.json({ data: [] })
+    const awb = searchParams.get('awb')
+    const courier = searchParams.get('courier') || 'jne'
+
+    if (!awb) return NextResponse.json({ error: 'awb required' }, { status: 400 })
 
     const res = await fetch(
-      `https://rajaongkir.komerce.id/api/v1/destination/domestic-destination?search=${encodeURIComponent(search)}&limit=20&offset=0`,
-      { headers: { 'key': RAJAONGKIR_KEY } }
+      `https://rajaongkir.komerce.id/api/v1/track/waybill?awb=${encodeURIComponent(awb)}&courier=${courier}`,
+      { method: 'POST', headers: { 'key': RAJAONGKIR_KEY } }
     )
     const data = await res.json()
     return NextResponse.json(data)
