@@ -2604,24 +2604,8 @@ export default function App() {
   const [collapsed,  setCollapsed]  = useState(false)
   const [globalCart, setGlobalCart] = useState<any[]>([])
   const [cartCount,  setCartCount]  = useState(0)
-  const [globalProducts,setGlobalProducts]=useState<any[]>(()=>{
-    try{
-      if(typeof window!=='undefined'){
-        const c=sessionStorage.getItem('tea_products')
-        if(c){const p=JSON.parse(c);if(p&&p.length>0)return p}
-      }
-    }catch(e){}
-    return ALL_PRODUCTS
-  })
-  const [globalOrders,setGlobalOrders]=useState<any[]>(()=>{
-    try{
-      if(typeof window!=='undefined'){
-        const c=sessionStorage.getItem('tea_orders')
-        if(c){const p=JSON.parse(c);if(p&&p.length>0)return p}
-      }
-    }catch(e){}
-    return INIT_ORDERS
-  })
+  const [globalProducts,setGlobalProducts]=useState<any[]>(ALL_PRODUCTS)
+  const [globalOrders,setGlobalOrders]=useState<any[]>(INIT_ORDERS)
   const [productsFetched,setProductsFetched]=useState(false)
 
   function nav(page: string, data?: any) {
