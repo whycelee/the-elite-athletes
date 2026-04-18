@@ -726,7 +726,7 @@ function Field({label,id,required,error,...props}:any){
 
 function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void,cart:any[],addToCart:(item:any)=>void}) {
   const [step,setStep]=useState(0)
-  const [cart,setCart]=useState(initCart.length>0?initCart:[{cartId:'c1',id:'TEA-001',name:'Court Precision Polo',sport:'Tennis',emoji:'🎾',price:649000,size:'M',color:'Forest',qty:1},{cartId:'c2',id:'TEA-007',name:'Pace Setter Shorts',sport:'Running',emoji:'🏃',price:429000,size:'L',color:'Black',qty:1}])
+  const [cart,setCart]=useState(initCart)
   const [shippingData,setShippingData]=useState<any>({})
   const [paymentMethod,setPaymentMethod]=useState('')
   const [coupon,setCoupon]=useState('')
@@ -2636,7 +2636,13 @@ export default function App() {
     }).catch(()=>{})
   },[])
   function addToCart(item: any) {
-    setGlobalCart(c=>[...c,{...item,cartId:'c'+Date.now()}]); setCartCount(n=>n+1)
+    setGlobalCart(c=>{
+      const key=(x:any)=>x.id+'-'+(x.size||'')+(x.color||'')
+      const existing=c.find(x=>key(x)===key(item))
+      if(existing){return c.map(x=>key(x)===key(item)?{...x,qty:(x.qty||1)+(item.qty||1)}:x)}
+      return [...c,{...item,cartId:'c'+Date.now(),qty:item.qty||1}]
+    })
+    setCartCount(n=>n+(item.qty||1))
   }
 
   return <>
