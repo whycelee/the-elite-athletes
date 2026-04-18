@@ -155,7 +155,7 @@ function MiniCard({p,onView,onAdd}:{p:any,onView:()=>void,onAdd:()=>void}) {
     style={{background:C.white,border:`1px solid ${hov?C.g300:C.ink6}`,borderRadius:16,overflow:'hidden',transform:hov?'translateY(-4px)':'none',boxShadow:hov?'0 12px 36px rgba(42,80,50,0.10)':'none',transition:'all 0.25s',display:'flex',flexDirection:'column',cursor:'pointer'}}>
     <div onClick={onView} style={{height:200,background:C.cream,display:'flex',alignItems:'center',justifyContent:'center',position:'relative',overflow:'hidden'}}>
       {p.image_url
-        ?<img src={p.image_url} alt={p.name} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}/>
+        ?<img src={p.image_url} alt={p.name} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',transition:'opacity 0.3s'}} loading="lazy"/>
         :<span style={{fontSize:72,position:'relative',zIndex:1}}>{p.emoji}</span>
       }
       <div style={{position:'absolute',top:12,left:12}}><PBadge label={p.badge}/></div>
@@ -585,7 +585,7 @@ function DetailPage({product:p,nav,addToCart,cartCount,allProducts:extAll}:{prod
     return [...sameSportGender,...sameSportOnly].slice(0,4)
   },[allProds,p.id,p.sport,p.gender])
   const SWATCH:Record<string,string>={Forest:'#2D5134',White:'#F8F8F6',Navy:'#1B2A4A',Black:'#1C1C1A',Charcoal:'#3A3A3A',Olive:'#5A6045',Sage:'#7A9E7E',Blush:'#E8B4B8',Khaki:'#C3B89A',Cream:'#FAF8F4',Sand:'#D4C4A0'}
-  function handleAdd(){if(!selSize){alert('Pilih ukuran terlebih dahulu.');return}addToCart({...p,qty,size:selSize,color:selColor});setAdded(true);setToast(p.name);setTimeout(()=>setAdded(false),2000)}
+  function handleAdd(){if(!selSize){alert('Pilih ukuran terlebih dahulu.');return}addToCart({...p,qty,size:selSize,color:selColor,image_url:p.image_url||null});setAdded(true);setToast(p.name);setTimeout(()=>setAdded(false),2000)}
   return <div style={{background:C.cream,minHeight:'100vh'}}>
     {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
     {showSizeGuide&&(
@@ -704,7 +704,7 @@ function DetailPage({product:p,nav,addToCart,cartCount,allProducts:extAll}:{prod
       </div>
       {related.length>0&&<div>
         <h2 style={{margin:'0 0 20px',fontFamily:"'DM Serif Display',Georgia,serif",fontSize:'clamp(1.3rem,2.5vw,1.7rem)',fontWeight:400,color:C.ink}}>You Might Also Like</h2>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:16}}>{related.map((r:any)=><MiniCard key={r.id} p={r} onView={()=>nav('detail',r)} onAdd={()=>{addToCart({...r,qty:1,size:r.sizes[0]});setToast(r.name)}}/>)}</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:16}}>{related.map((r:any)=><MiniCard key={r.id} p={r} onView={()=>nav('detail',r)} onAdd={()=>{addToCart({...r,qty:1,size:(r.sizes&&r.sizes[0])||'M',image_url:r.image_url||null});setToast(r.name)}}/>)}</div>
       </div>}
     </div>
     <footer style={{background:C.g900,borderTop:'1px solid rgba(255,255,255,0.06)',padding:'22px 5vw',textAlign:'center'}}><p style={{margin:0,fontSize:12,color:C.g600}}>© 2025 The Elite Athletes.</p></footer>
@@ -2482,7 +2482,7 @@ export default function App() {
   const [collapsed,  setCollapsed]  = useState(false)
   const [globalCart, setGlobalCart] = useState<any[]>([])
   const [cartCount,  setCartCount]  = useState(0)
-  const [globalProducts,setGlobalProducts]=useState<any[]>(ALL_PRODUCTS)
+  const [globalProducts,setGlobalProducts]=useState<any[]>(ALL_PRODUCTS) // ALL_PRODUCTS as fallback
   const [globalOrders,setGlobalOrders]=useState<any[]>(INIT_ORDERS)
   const [productsFetched,setProductsFetched]=useState(false)
 
@@ -2503,8 +2503,13 @@ export default function App() {
     window.addEventListener('keydown',handler)
     return()=>window.removeEventListener('keydown',handler)
   },[])
-  // Fetch products ONCE at app level - no per-page re-fetch
+  // Fetch products ONCE at app level - cache in sessionStorage
   useEffect(()=>{
+    // Try cache first for instant display
+    try{
+      const cached=sessionStorage.getItem('tea_products')
+      if(cached){const parsed=JSON.parse(cached);if(parsed.length>0)setGlobalProducts(parsed)}
+    }catch(e){}
     fetch('/api/products').then(r=>r.json()).then(d=>{
       if(d.data&&d.data.length>0){
         const norm=d.data.map((p:any)=>({
@@ -2522,10 +2527,12 @@ export default function App() {
           stock:Object.fromEntries((p.stock||[]).map((s:any)=>[s.size,s.quantity]))
         }))
         setGlobalProducts(norm)
+        try{sessionStorage.setItem('tea_products',JSON.stringify(norm))}catch(e){}
       }
       setProductsFetched(true)
     }).catch(()=>setProductsFetched(true))
-    // Fetch orders once at app level
+    // Fetch orders - try cache first
+    try{const co=sessionStorage.getItem('tea_orders');if(co){const po=JSON.parse(co);if(po.length>0)setGlobalOrders(po)}}catch(e){}
     fetch('/api/orders').then(r=>r.json()).then(d=>{
       if(d.data&&d.data.length>0){
         const norm=d.data.map((o:any)=>({
@@ -2544,6 +2551,7 @@ export default function App() {
           items:typeof o.items==='string'?JSON.parse(o.items||'[]'):(o.items||[]),
         }))
         setGlobalOrders(norm)
+        try{sessionStorage.setItem('tea_orders',JSON.stringify(norm))}catch(e){}
       }
     }).catch(()=>{})
   },[])
