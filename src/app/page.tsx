@@ -748,7 +748,7 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
         body:JSON.stringify({
           customer:{name:shippingData.firstName+' '+shippingData.lastName,email:shippingData.email,phone:shippingData.phone,address:shippingData.address,city:shippingData.city,province:shippingData.province},
           items:cart.map((i:any)=>({id:i.id,sku:i.sku,name:i.name,size:i.size,qty:i.qty||1,price:i.price})),
-          shipping:{courier:shippingData.shipping},
+          shipping:{courier:'JNE',service:selectedService?.service||'',etd:selectedService?.etd||''},
           promo_code:coupon||null,
           subtotal,discount,shipping_cost:shippingCost,total,
         }),
@@ -1388,7 +1388,7 @@ function AdminOrders({orders:initO}:{orders:any[]}) {
             </a>
           </div>}
           <div style={{fontSize:11,color:C.ink3}}>📅 {new Date(selected.date).toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</div>
-          <div style={{fontSize:11,color:C.ink3}}>💳 Bayar via: <strong>{selected.payment||'-'}</strong></div>
+          <div style={{fontSize:11,color:C.ink3}}>💳 Bayar via: <strong>{selected.payment||'-'}</strong>{selected.paid_at&&<span style={{fontSize:10,color:C.g500,marginLeft:8}}>✓ Lunas {new Date(selected.paid_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>}</div>
           <div style={{fontSize:11,color:C.ink3}}>📍 {selected.address||'-'}</div>
           {selected.resi&&<div style={{fontSize:11,color:C.g600,fontWeight:600}}>📦 Resi: {selected.resi} · <a href={`https://www.jne.co.id/id/tracking/trace/${selected.resi}`} target="_blank" rel="noopener noreferrer" style={{color:C.blue}}>Track JNE →</a></div>}
         </div>
