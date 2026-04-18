@@ -1155,7 +1155,7 @@ function AdminOverview({products,orders,customers}:{products:any[],orders:any[],
   </div>
 }
 
-function AdminOrders({orders:initO}:{orders:any[]}) {
+function AdminOrders({orders:initO,products:allProds=[]}:{orders:any[],products?:any[]}) {
   const [orders,setOrders]=useState<any[]>(initO)
   const [search,setSearch]=useState('')
   const [dateFrom,setDateFrom]=useState('')
@@ -1406,7 +1406,7 @@ function AdminOrders({orders:initO}:{orders:any[]}) {
           {(selected.items||[]).map((item:any,i:number)=>(
             <div key={i} style={{display:'flex',gap:10,padding:'9px 0',borderBottom:`1px solid ${C.ink6}`}}>
               <div style={{width:44,height:44,borderRadius:8,overflow:'hidden',background:C.cream,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                {(item.image_url||item.imageUrl)?<img src={item.image_url||item.imageUrl} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:20}}>{item.emoji||'👕'}</span>}
+{(()=>{const img=item.image_url||item.imageUrl||allProds.find((p:any)=>p.sku===item.sku||p.id===item.id)?.image_url;return img?<img src={img} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:20}}>{item.emoji||'👕'}</span>})()}
               </div>
               <div style={{flex:1}}>
                 <p style={{margin:'0 0 2px',fontSize:12,fontWeight:700,color:C.ink}}>{item.name}</p>
@@ -2609,7 +2609,7 @@ export default function App() {
     {route==='admin' && (
       <AdminLayout page={adminPage} setPage={setAdminPage} nav={nav} collapsed={collapsed} setCollapsed={setCollapsed}>
         {adminPage==='overview'     && <AdminOverview     products={globalProducts} orders={globalOrders} customers={INIT_CUSTOMERS}/>}
-        {adminPage==='orders'       && <AdminOrders       orders={globalOrders}/>}
+        {adminPage==='orders'       && <AdminOrders       orders={globalOrders} products={globalProducts}/>}
         {adminPage==='inventory'    && <AdminInventory    products={globalProducts}/>}
         {adminPage==='customers'    && <AdminCustomers    customers={INIT_CUSTOMERS} orders={INIT_ORDERS}/>}
         {adminPage==='financial'    && <AdminFinancial/>}
