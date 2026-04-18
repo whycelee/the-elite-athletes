@@ -757,6 +757,8 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
           customer:{name:shippingData.firstName+' '+shippingData.lastName,email:shippingData.email,phone:shippingData.phone,address:shippingData.address,city:shippingData.city,province:shippingData.province},
           items:cart.map((i:any)=>({id:i.id,sku:i.sku,name:i.name,size:i.size,qty:i.qty||1,price:i.price})),
           shipping:{courier:'JNE',service:selectedService?.service||'',etd:selectedService?.etd||''},
+          phone:shippingData.phone,
+          province:selectedDest?.province_name||shippingData.province||'',
           promo_code:coupon||null,
           subtotal,discount,shipping_cost:shippingCost,total,
         }),
@@ -767,18 +769,18 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
       if(snap&&data.snap_token){
         snap.pay(data.snap_token,{
           onSuccess:(result:any)=>{
-            setConfirmedOrder({id:data.order_id,date:new Date().toISOString(),email:shippingData.email,customerName:shippingData.firstName+' '+shippingData.lastName,address:shippingData.address+', '+shippingData.city,payment:result.payment_type||paymentMethod,items:cart,total,status:'processing'})
+            setConfirmedOrder({id:data.order_id,date:new Date().toISOString(),email:shippingData.email,customerName:shippingData.firstName+' '+shippingData.lastName,phone:shippingData.phone,address:shippingData.address+', '+shippingData.city,province:selectedDest?.province_name||shippingData.province||'',payment:result.payment_type||paymentMethod,items:cart,total,status:'processing'})
             setPlacing(false);setStep(4)
           },
           onPending:()=>{
-            setConfirmedOrder({id:data.order_id,date:new Date().toISOString(),email:shippingData.email,customerName:shippingData.firstName+' '+shippingData.lastName,address:shippingData.address+', '+shippingData.city,payment:paymentMethod,items:cart,total,status:'pending'})
+            setConfirmedOrder({id:data.order_id,date:new Date().toISOString(),email:shippingData.email,customerName:shippingData.firstName+' '+shippingData.lastName,phone:shippingData.phone,address:shippingData.address+', '+shippingData.city,province:selectedDest?.province_name||shippingData.province||'',payment:paymentMethod,items:cart,total,status:'pending'})
             setPlacing(false);setStep(4)
           },
           onError:(err:any)=>{alert('Pembayaran gagal: '+(err.message||'Coba lagi'));setPlacing(false)},
           onClose:()=>{setPlacing(false)},
         })
       } else {
-        setConfirmedOrder({id:data.order_id,date:new Date().toISOString(),email:shippingData.email,customerName:shippingData.firstName+' '+shippingData.lastName,address:shippingData.address+', '+shippingData.city,payment:paymentMethod,items:cart,total,status:'pending'})
+        setConfirmedOrder({id:data.order_id,date:new Date().toISOString(),email:shippingData.email,customerName:shippingData.firstName+' '+shippingData.lastName,phone:shippingData.phone,address:shippingData.address+', '+shippingData.city,province:selectedDest?.province_name||shippingData.province||'',payment:paymentMethod,items:cart,total,status:'pending'})
         setPlacing(false);setStep(4)
       }
     } catch(err:any){
@@ -1169,15 +1171,12 @@ function AdminOrders({orders:initO}:{orders:any[]}) {
   const [manualProduct,setManualProduct]=useState('')
 
   useEffect(()=>{
-    fetch('/api/orders').then(r=>r.json()).then(d=>{
-      if(d.data&&d.data.length>0) setOrders(d.data)
-    }).catch(()=>{})
-  },[])
+  },[]) // orders pre-loaded from App level
 
   const allProvs=useMemo(()=>Array.from(new Set(orders.map((o:any)=>o.province||o.address?.split(',').pop()?.trim()||''))).filter(Boolean).sort(),[orders])
 
   const filtered=useMemo(()=>{
-    let o=[...orders].sort((a:any,b:any)=>new Date(b.date).getTime()-new Date(a.date).getTime())
+    let o=[...orders].sort((a:any,b:any)=>{const da=new Date(a.date||0).getTime(),db=new Date(b.date||0).getTime();return db-da})
     if(search) o=o.filter((x:any)=>(x.customerName||'').toLowerCase().includes(search.toLowerCase())||(x.id||'').toLowerCase().includes(search.toLowerCase())||(x.phone||'').includes(search))
     if(dateFrom) o=o.filter((x:any)=>new Date(x.date)>=new Date(dateFrom))
     if(dateTo) o=o.filter((x:any)=>new Date(x.date)<=new Date(dateTo+'T23:59:59'))
@@ -1216,7 +1215,7 @@ function AdminOrders({orders:initO}:{orders:any[]}) {
     <style>body{font-family:Arial,sans-serif;padding:24px;color:#000}h2{margin:0 0 4px}hr{border:1px dashed #ccc;margin:12px 0}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;font-size:13px}th{background:#f5f5f5}@media print{.no-print{display:none}}</style>
     </head><body>
     <h2>PACKING LIST — ${o.id}</h2>
-    <p style="font-size:12px;color:#666">Tanggal: ${new Date(o.date).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'})}</p>
+    <p style="font-size:12px;color:#666">Tanggal: ${(o.date&&!isNaN(new Date(o.date).getTime())?new Date(o.date).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}):new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}))}</p>
     <hr/>
     <table><thead><tr><th>SKU</th><th>Nama Produk</th><th>Size</th><th>Warna</th><th>Qty</th></tr></thead>
     <tbody>${(o.items||[]).map((item:any)=>`<tr><td>${item.sku||'-'}</td><td>${item.name}</td><td>${item.size||'-'}</td><td>${item.color||'-'}</td><td style="text-align:center;font-weight:bold">${item.qty||1}</td></tr>`).join('')}
@@ -1332,7 +1331,7 @@ function AdminOrders({orders:initO}:{orders:any[]}) {
                 onMouseEnter={e=>{if(selected?.id!==o.id)(e.currentTarget as HTMLElement).style.background=C.g50}}
                 onMouseLeave={e=>{if(selected?.id!==o.id)(e.currentTarget as HTMLElement).style.background=idx%2===0?C.white:C.cream}}>
                 <td style={{padding:'9px 12px',fontWeight:700,color:C.g700,whiteSpace:'nowrap'}}>{o.id}</td>
-                <td style={{padding:'9px 12px',color:C.ink3,whiteSpace:'nowrap'}}>{new Date(o.date).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'2-digit'})}</td>
+                <td style={{padding:'9px 12px',color:C.ink3,whiteSpace:'nowrap'}}>{(o.date&&!isNaN(new Date(o.date).getTime())?new Date(o.date).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'2-digit'}):'-')}</td>
                 <td style={{padding:'9px 12px',fontWeight:600,color:C.ink,whiteSpace:'nowrap'}}>{o.customerName}</td>
                 <td style={{padding:'9px 12px',whiteSpace:'nowrap'}}>
                   <div style={{display:'flex',alignItems:'center',gap:6}}>
@@ -1395,7 +1394,7 @@ function AdminOrders({orders:initO}:{orders:any[]}) {
               Chat WA
             </a>
           </div>}
-          <div style={{fontSize:11,color:C.ink3}}>📅 {new Date(selected.date).toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</div>
+          <div style={{fontSize:11,color:C.ink3}}>📅 {(selected.date&&!isNaN(new Date(selected.date).getTime())?new Date(selected.date).toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}):'-')}</div>
           <div style={{fontSize:11,color:C.ink3}}>💳 Bayar via: <strong>{selected.payment||'-'}</strong>{selected.paid_at&&<span style={{fontSize:10,color:C.g500,marginLeft:8}}>✓ Lunas {new Date(selected.paid_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>}</div>
           <div style={{fontSize:11,color:C.ink3}}>📍 {selected.address||'-'}</div>
           {selected.resi&&<div style={{fontSize:11,color:C.g600,fontWeight:600}}>📦 Resi: {selected.resi} · <a href={`https://www.jne.co.id/id/tracking/trace/${selected.resi}`} target="_blank" rel="noopener noreferrer" style={{color:C.blue}}>Track JNE →</a></div>}
@@ -1407,7 +1406,7 @@ function AdminOrders({orders:initO}:{orders:any[]}) {
           {(selected.items||[]).map((item:any,i:number)=>(
             <div key={i} style={{display:'flex',gap:10,padding:'9px 0',borderBottom:`1px solid ${C.ink6}`}}>
               <div style={{width:44,height:44,borderRadius:8,overflow:'hidden',background:C.cream,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                {item.image_url?<img src={item.image_url} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:20}}>{item.emoji||'👕'}</span>}
+                {(item.image_url||item.imageUrl)?<img src={item.image_url||item.imageUrl} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:20}}>{item.emoji||'👕'}</span>}
               </div>
               <div style={{flex:1}}>
                 <p style={{margin:'0 0 2px',fontSize:12,fontWeight:700,color:C.ink}}>{item.name}</p>
@@ -2484,6 +2483,7 @@ export default function App() {
   const [globalCart, setGlobalCart] = useState<any[]>([])
   const [cartCount,  setCartCount]  = useState(0)
   const [globalProducts,setGlobalProducts]=useState<any[]>(ALL_PRODUCTS)
+  const [globalOrders,setGlobalOrders]=useState<any[]>(INIT_ORDERS)
   const [productsFetched,setProductsFetched]=useState(false)
 
   function nav(page: string, data?: any) {
@@ -2525,6 +2525,27 @@ export default function App() {
       }
       setProductsFetched(true)
     }).catch(()=>setProductsFetched(true))
+    // Fetch orders once at app level
+    fetch('/api/orders').then(r=>r.json()).then(d=>{
+      if(d.data&&d.data.length>0){
+        const norm=d.data.map((o:any)=>({
+          ...o,
+          id:o.id||o.order_id,
+          customerName:o.customerName||o.customer_name||o.customers?.name||'',
+          date:o.date||o.created_at||o.createdAt||new Date().toISOString(),
+          phone:o.phone||o.customers?.phone||'',
+          address:o.address||o.customers?.address||'',
+          province:o.province||o.customers?.province||'',
+          payment:o.payment||o.payment_method||'',
+          total:o.total||o.grand_total||0,
+          status:o.status||'pending',
+          resi:o.resi||'',
+          paid_at:o.paid_at||null,
+          items:typeof o.items==='string'?JSON.parse(o.items||'[]'):(o.items||[]),
+        }))
+        setGlobalOrders(norm)
+      }
+    }).catch(()=>{})
   },[])
   function addToCart(item: any) {
     setGlobalCart(c=>[...c,{...item,cartId:'c'+Date.now()}]); setCartCount(n=>n+1)
@@ -2570,9 +2591,9 @@ export default function App() {
 
     {route==='admin' && (
       <AdminLayout page={adminPage} setPage={setAdminPage} nav={nav} collapsed={collapsed} setCollapsed={setCollapsed}>
-        {adminPage==='overview'     && <AdminOverview     products={ALL_PRODUCTS} orders={INIT_ORDERS} customers={INIT_CUSTOMERS}/>}
-        {adminPage==='orders'       && <AdminOrders       orders={INIT_ORDERS}/>}
-        {adminPage==='inventory'    && <AdminInventory    products={ALL_PRODUCTS}/>}
+        {adminPage==='overview'     && <AdminOverview     products={globalProducts} orders={globalOrders} customers={INIT_CUSTOMERS}/>}
+        {adminPage==='orders'       && <AdminOrders       orders={globalOrders}/>}
+        {adminPage==='inventory'    && <AdminInventory    products={globalProducts}/>}
         {adminPage==='customers'    && <AdminCustomers    customers={INIT_CUSTOMERS} orders={INIT_ORDERS}/>}
         {adminPage==='financial'    && <AdminFinancial/>}
         {adminPage==='content'      && <AdminContent/>}
