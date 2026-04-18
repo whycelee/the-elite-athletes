@@ -1450,6 +1450,304 @@ function AdminOrders({orders:initO}:{orders:any[]}) {
   </div>
 }
 
+// ═══════════════════════════════════════════════════════════
+// PRODUCT FORM TYPES & SHARED COMPONENT
+// ═══════════════════════════════════════════════════════════
+type PFData = {
+  sku:string; name:string; hargaAwal:string; disc:string; hargaJual:string; hpp:string;
+  weight:string;
+  desc:string; sport:string; gender:string; extraSports:string;
+  apparelColors:Record<string,string>;
+  footwearColors:Record<string,string>;
+  apparelOn:boolean; footwearOn:boolean;
+  imgs:(string|null)[]; sizeGuideImg:string|null;
+}
+type PFStock = Record<string,number>
+
+function mkPFData(ep?:any):PFData {
+  const apparelSizes=['XS','S','M','L','XL','XXL','XXXL']
+  const footSizes=['36','37','38','39','40','41','42','43','44','45']
+  const apparelColors:Record<string,string>={}
+  const footwearColors:Record<string,string>={}
+  if(ep?.stock){
+    Object.keys(ep.stock).forEach((k:string)=>{
+      const [sz,...rest]=k.split('-')
+      const color=rest.join('-')
+      if(apparelSizes.includes(sz)) apparelColors[sz]=(apparelColors[sz]?apparelColors[sz]+',':'')+color
+      else if(footSizes.includes(sz)) footwearColors[sz]=(footwearColors[sz]?footwearColors[sz]+',':'')+color
+    })
+  }
+  const price=ep?.price||0
+  const original=ep?.original_price||ep?.original||0
+  const disc=original&&price?Math.round((1-price/original)*100):0
+  return {
+    sku:ep?.sku||'',name:ep?.name||'',
+    hargaAwal:String(original||''),disc:String(disc||''),
+    hargaJual:String(price||''),hpp:String(ep?.hpp||''),
+    weight:String(ep?.weight||'500'),
+    desc:ep?.description||ep?.desc||'',
+    sport:ep?.sport||'Tennis',gender:ep?.gender||'Men',
+    extraSports:(ep?.tags||[]).join(', '),
+    apparelColors:Object.keys(apparelColors).length>0?apparelColors:{},
+    footwearColors:Object.keys(footwearColors).length>0?footwearColors:{},
+    apparelOn:ep?Object.keys(ep.stock||{}).some((k:string)=>['XS','S','M','L','XL','XXL','XXXL'].includes(k.split('-')[0])):true,
+    footwearOn:ep?Object.keys(ep.stock||{}).some((k:string)=>['36','37','38','39','40','41','42','43','44','45'].includes(k.split('-')[0])):false,
+    imgs:[ep?.image_url||null,...(ep?.gallery||[null,null,null,null])].slice(0,5) as (string|null)[],
+    sizeGuideImg:ep?.size_guide_img||null,
+  }
+}
+
+function mkPFStock(ep?:any):PFStock {
+  if(!ep?.stock) return {}
+  const res:PFStock={}
+  Object.entries(ep.stock).forEach(([k,v])=>{res[k]=v as number})
+  return res
+}
+
+function ProductForm({data,setData,stock,setStock,uploadFn,saving,onSave,onDelete,onCancel,isEdit}:{
+  data:PFData,setData:(d:PFData)=>void,
+  stock:PFStock,setStock:(s:PFStock)=>void,
+  uploadFn:(f:File,name:string)=>Promise<string|null>,
+  saving:boolean,onSave:()=>void,onDelete?:()=>void,onCancel:()=>void,isEdit:boolean
+}){
+  const [uploading,setUploading]=useState(false)
+  const [uploadingSG,setUploadingSG]=useState(false)
+  const [confirmDel,setConfirmDel]=useState(false)
+  const APPAREL=['XS','S','M','L','XL','XXL','XXXL']
+  const FOOTWEAR=['36','37','38','39','40','41','42','43','44','45']
+
+  function onHargaAwalChange(val:string){
+    const ha=parseInt(val)||0;const d=parseInt(data.disc)||0
+    const hj=d>0?Math.round(ha*(1-d/100)):ha
+    setData({...data,hargaAwal:val,hargaJual:hj>0?String(hj):''})
+  }
+  function onDiscChange(val:string){
+    const ha=parseInt(data.hargaAwal)||0;const d=parseInt(val)||0
+    const hj=ha>0&&d>0?Math.round(ha*(1-d/100)):ha
+    setData({...data,disc:val,hargaJual:hj>0?String(hj):''})
+  }
+  function updateColors(size:string,colorStr:string,isFootwear:boolean){
+    const newData={...data}
+    if(isFootwear) newData.footwearColors={...data.footwearColors,[size]:colorStr}
+    else newData.apparelColors={...data.apparelColors,[size]:colorStr}
+    setData(newData)
+    const newStock={...stock}
+    Object.keys(newStock).forEach(k=>{if(k.startsWith(size+'-')||k===size)delete newStock[k]})
+    const colors=colorStr.split(',').map(c=>c.trim()).filter(Boolean)
+    colors.forEach(c=>{const key=`${size}-${c}`;if(!(key in newStock))newStock[key]=0})
+    setStock(newStock)
+  }
+  function toggleSize(size:string,isFootwear:boolean){
+    const newData={...data}
+    const colorMap=isFootwear?{...data.footwearColors}:{...data.apparelColors}
+    const newStock={...stock}
+    if(size in colorMap){delete colorMap[size];Object.keys(newStock).forEach(k=>{if(k.startsWith(size+'-')||k===size)delete newStock[k]})}
+    else{colorMap[size]=''}
+    if(isFootwear) newData.footwearColors=colorMap; else newData.apparelColors=colorMap
+    setData(newData);setStock(newStock)
+  }
+  const ha=parseInt(data.hargaAwal)||0,hj=parseInt(data.hargaJual)||0,hpp=parseInt(data.hpp)||0
+  const laba=hj-hpp,labaPct=hj>0?Math.round(laba/hj*100):0
+  async function handleUploadImg(file:File,idx:number){
+    setUploading(true)
+    const url=await uploadFn(file,`${data.sku||'prod'}-img${idx}-${Date.now()}`)
+    if(url){const imgs=[...data.imgs];imgs[idx]=url;setData({...data,imgs})}
+    setUploading(false)
+  }
+  async function handleUploadSG(file:File){
+    setUploadingSG(true)
+    const url=await uploadFn(file,`${data.sku||'prod'}-sg-${Date.now()}`)
+    if(url)setData({...data,sizeGuideImg:url})
+    setUploadingSG(false)
+  }
+  function SizeSection({sizes,colorMap,isFootwear}:{sizes:string[],colorMap:Record<string,string>,isFootwear:boolean}){
+    return <div style={{display:'flex',flexDirection:'column',gap:10}}>
+      {sizes.map(sz=>{
+        const checked=sz in colorMap
+        const colorStr=colorMap[sz]||''
+        const colors=colorStr.split(',').map(c=>c.trim()).filter(Boolean)
+        return <div key={sz} style={{background:C.white,borderRadius:9,padding:'10px 12px',border:`1px solid ${checked?C.g300:C.ink6}`}}>
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:checked?8:0}}>
+            <input type="checkbox" checked={checked} onChange={()=>toggleSize(sz,isFootwear)} style={{width:15,height:15,cursor:'pointer',accentColor:C.g700}}/>
+            <span style={{fontSize:13,fontWeight:700,color:checked?C.ink:C.ink4,minWidth:36}}>{sz}</span>
+            {checked&&<input value={colorStr} onChange={e=>updateColors(sz,e.target.value,isFootwear)} placeholder="Black, White, Navy" style={{flex:1,padding:'5px 9px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink}}/>}
+          </div>
+          {checked&&colors.length>0&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:7}}>
+            {colors.map(c=>{
+              const key=`${sz}-${c}`
+              return <div key={key} style={{display:'flex',alignItems:'center',gap:6,background:C.cream,borderRadius:7,padding:'5px 9px'}}>
+                <span style={{fontSize:11,fontWeight:600,color:C.ink2,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sz} {c}</span>
+                <button type="button" onClick={()=>setStock({...stock,[key]:Math.max(0,(stock[key]||0)-1)})} style={{width:20,height:20,borderRadius:4,background:C.ink6,border:'none',cursor:'pointer',fontSize:12,color:C.ink2,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+                <span style={{fontSize:12,fontWeight:700,color:C.ink,minWidth:20,textAlign:'center'}}>{stock[key]||0}</span>
+                <button type="button" onClick={()=>setStock({...stock,[key]:(stock[key]||0)+1})} style={{width:20,height:20,borderRadius:4,background:C.g100,border:'none',cursor:'pointer',fontSize:12,color:C.g700,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+              </div>
+            })}
+          </div>}
+          {checked&&colors.length===0&&<p style={{margin:0,fontSize:11,color:C.ink4,fontStyle:'italic'}}>Ketik warna di atas untuk menambah stok</p>}
+        </div>
+      })}
+    </div>
+  }
+  return <div style={{display:'flex',flexDirection:'column',gap:14}}>
+    {/* ① FOTO */}
+    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+      <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:10}}>① Foto Produk</label>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+        {[0,1,2,3,4].map(i=>(
+          <div key={i} style={{display:'flex',flexDirection:'column',gap:4,alignItems:'center'}}>
+            <div style={{width:i===0?90:64,height:i===0?90:64,borderRadius:9,overflow:'hidden',border:`2px ${data.imgs[i]?'solid '+C.g300:'dashed '+C.ink5}`,background:C.white,display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
+              {data.imgs[i]?<><img src={data.imgs[i]!} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/><button type="button" onClick={()=>{const imgs=[...data.imgs];imgs[i]=null;setData({...data,imgs})}} style={{position:'absolute',top:2,right:2,width:15,height:15,borderRadius:'50%',background:C.red,color:'#fff',border:'none',cursor:'pointer',fontSize:8}}>✕</button></>:<span style={{fontSize:i===0?24:18}}>📷</span>}
+              {uploading&&<div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:9,color:'#fff'}}>⏳</span></div>}
+            </div>
+            <label style={{fontSize:9,color:C.g600,fontWeight:600,cursor:'pointer'}}>{i===0?'Utama':`Det.${i}`}<input type="file" accept="image/*" style={{display:'none'}} onChange={async e=>{const f=e.target.files?.[0];if(f)await handleUploadImg(f,i)}}/></label>
+          </div>
+        ))}
+      </div>
+      <p style={{margin:'6px 0 0',fontSize:10,color:C.ink4}}>Utama tampil di catalog. Det.1–4 jadi carousel di halaman produk.</p>
+    </div>
+    {/* ② SKU + ③ NAMA */}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:11}}>
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>② SKU *</label>
+        <input value={data.sku} onChange={e=>setData({...data,sku:e.target.value})} placeholder="TEA-TEN-001" disabled={isEdit} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:isEdit?C.ink4:C.ink,background:isEdit?C.cream:C.white}}/>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>③ Nama Produk *</label>
+        <input value={data.name} onChange={e=>setData({...data,name:e.target.value})} placeholder="Court Precision Polo" style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+      </div>
+    </div>
+    {/* ④ HARGA */}
+    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+      <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:10}}>④ Harga</label>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 1fr 1fr',gap:9,marginBottom:10}}>
+        {([['Harga Awal (Rp)','hargaAwal','890000',false,(v:string)=>onHargaAwalChange(v)],['Disc (%)','disc','20',false,(v:string)=>onDiscChange(v)],['Harga Jual (auto)','hargaJual','712000',true,null],['HPP / Modal (Rp)','hpp','280000',false,(v:string)=>setData({...data,hpp:v})]] as any[]).map((f:any)=>(
+          <div key={f[1]} style={{display:'flex',flexDirection:'column',gap:4}}>
+            <label style={{fontSize:10,fontWeight:600,color:C.ink4}}>{f[0]}</label>
+            <input type="number" readOnly={f[3]} value={(data as any)[f[1]]} onChange={e=>f[4]&&f[4](e.target.value)} placeholder={f[2]} style={{padding:'8px 10px',border:`1px solid ${f[3]?C.g200:C.ink5}`,borderRadius:7,fontSize:13,fontFamily:'inherit',outline:'none',color:f[3]?C.g600:C.ink,background:f[3]?C.g50:C.white,fontWeight:f[3]?700:400}}/>
+          </div>
+        ))}
+      </div>
+      {hj>0&&hpp>0&&<div style={{display:'flex',gap:14,padding:'8px 12px',background:laba>0?C.g50:C.redBg,borderRadius:8,border:`1px solid ${laba>0?C.g200:C.redLight}`}}>
+        <span style={{fontSize:12,color:C.ink3}}>Laba per unit:</span>
+        <span style={{fontSize:13,fontWeight:800,color:laba>0?C.g700:C.red}}>{fmt(laba)}</span>
+        <span style={{fontSize:11,color:laba>0?C.g500:C.red}}>({labaPct}% margin)</span>
+      </div>}
+      <div style={{display:'flex',alignItems:'flex-end',gap:10,marginTop:10}}>
+        <div style={{display:'flex',flexDirection:'column',gap:4,flex:1}}>
+          <label style={{fontSize:10,fontWeight:600,color:C.ink4}}>Berat Produk (gram)</label>
+          <input type="number" min={1} value={data.weight} onChange={e=>setData({...data,weight:e.target.value})} placeholder="500" style={{padding:'8px 10px',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+        </div>
+        <div style={{display:'flex',gap:5,paddingBottom:1}}>
+          {[['Kaos','250'],['Celana','350'],['Jaket','500'],['Sepatu','800']].map(([l,w])=>(
+            <button key={l} type="button" onClick={()=>setData({...data,weight:w})} style={{padding:'5px 8px',borderRadius:6,fontSize:10,fontWeight:600,cursor:'pointer',background:data.weight===w?C.g800:C.cream,color:data.weight===w?'#fff':C.ink2,border:`1px solid ${data.weight===w?C.g800:C.ink5}`,whiteSpace:'nowrap'}}>{l}<br/>{w}g</button>
+          ))}
+        </div>
+      </div>
+    </div>
+    {/* SPORT & GENDER */}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Sport</label>
+        <select value={data.sport} onChange={e=>setData({...data,sport:e.target.value})} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}>
+          {['Tennis','Badminton','Padel','Hyrox','Gym','Running','Golf','Pilates','Yoga','Footwear','Aksesoris','Lainnya'].map(s=><option key={s}>{s}</option>)}
+        </select>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Gender</label>
+        <select value={data.gender} onChange={e=>setData({...data,gender:e.target.value})} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}>
+          {['Men','Women','Unisex'].map(s=><option key={s}>{s}</option>)}
+        </select>
+      </div>
+    </div>
+    <div style={{display:'flex',flexDirection:'column',gap:4}}>
+      <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>Sport Tambahan (pisahkan koma)</label>
+      <input value={data.extraSports} onChange={e=>setData({...data,extraSports:e.target.value})} placeholder="Gym, Running" style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+    </div>
+    {/* ⑤ DESKRIPSI */}
+    <div style={{display:'flex',flexDirection:'column',gap:4}}>
+      <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>⑤ Deskripsi</label>
+      <textarea value={data.desc} onChange={e=>setData({...data,desc:e.target.value})} rows={3} placeholder="Deskripsi produk..." style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink,resize:'vertical'}}/>
+    </div>
+    {/* ⑥ SIZE GUIDE */}
+    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+      <label style={{fontSize:12,fontWeight:700,color:C.ink3,display:'block',marginBottom:8}}>⑥ Size Guide</label>
+      <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
+        <div style={{width:80,height:80,borderRadius:9,overflow:'hidden',border:`2px ${data.sizeGuideImg?'solid '+C.g300:'dashed '+C.ink5}`,background:C.white,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+          {data.sizeGuideImg?<img src={data.sizeGuideImg} alt="sg" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:24}}>📐</span>}
+        </div>
+        <div style={{flex:1}}>
+          <label style={{display:'block',padding:'8px 14px',background:uploadingSG?C.ink5:C.g800,color:'#fff',borderRadius:8,fontSize:12,fontWeight:600,cursor:uploadingSG?'not-allowed':'pointer',textAlign:'center',marginBottom:5}}>
+            {uploadingSG?'Uploading...':'📤 Upload Size Guide'}
+            <input type="file" accept="image/*" disabled={uploadingSG} style={{display:'none'}} onChange={async e=>{const f=e.target.files?.[0];if(f)handleUploadSG(f)}}/>
+          </label>
+          {data.sizeGuideImg&&<button type="button" onClick={()=>setData({...data,sizeGuideImg:null})} style={{width:'100%',padding:'5px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:7,fontSize:11,color:C.red,cursor:'pointer'}}>Hapus</button>}
+        </div>
+      </div>
+    </div>
+    {/* ⑦ BAJU */}
+    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:data.apparelOn?12:0}}>
+        <label style={{fontSize:12,fontWeight:700,color:C.ink3}}>⑦ Ukuran Baju (XS–XXXL)</label>
+        <div onClick={()=>setData({...data,apparelOn:!data.apparelOn})} style={{width:36,height:20,borderRadius:10,background:data.apparelOn?C.g600:C.ink5,position:'relative',cursor:'pointer',transition:'background 0.2s',flexShrink:0}}>
+          <div style={{position:'absolute',top:2,left:data.apparelOn?16:2,width:16,height:16,borderRadius:'50%',background:'#fff',transition:'left 0.2s'}}/>
+        </div>
+      </div>
+      {data.apparelOn&&<SizeSection sizes={APPAREL} colorMap={data.apparelColors} isFootwear={false}/>}
+    </div>
+    {/* ⑧ SEPATU */}
+    <div style={{background:C.cream,borderRadius:10,padding:'12px 14px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:data.footwearOn?12:0}}>
+        <label style={{fontSize:12,fontWeight:700,color:C.ink3}}>⑧ Ukuran Kaki (36–45)</label>
+        <div onClick={()=>setData({...data,footwearOn:!data.footwearOn})} style={{width:36,height:20,borderRadius:10,background:data.footwearOn?C.g600:C.ink5,position:'relative',cursor:'pointer',transition:'background 0.2s',flexShrink:0}}>
+          <div style={{position:'absolute',top:2,left:data.footwearOn?16:2,width:16,height:16,borderRadius:'50%',background:'#fff',transition:'left 0.2s'}}/>
+        </div>
+      </div>
+      {data.footwearOn&&<SizeSection sizes={FOOTWEAR} colorMap={data.footwearColors} isFootwear={true}/>}
+    </div>
+    {/* DELETE */}
+    {confirmDel&&onDelete&&<div style={{background:C.redBg,border:`1px solid ${C.redLight}`,borderRadius:10,padding:'12px 14px'}}>
+      <p style={{margin:'0 0 8px',fontSize:13,fontWeight:700,color:C.red}}>⚠️ Hapus produk ini?</p>
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={()=>setConfirmDel(false)} style={{flex:1,padding:'8px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
+        <button onClick={onDelete} style={{flex:1,padding:'8px',background:C.red,color:'#fff',border:'none',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer'}}>Ya, Hapus</button>
+      </div>
+    </div>}
+    {/* BUTTONS */}
+    <div style={{display:'flex',gap:9,justifyContent:'space-between',paddingTop:4,borderTop:`1px solid ${C.ink6}`}}>
+      {isEdit&&onDelete?<button onClick={()=>setConfirmDel(true)} style={{padding:'10px 16px',background:C.redBg,border:`1px solid ${C.redLight}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.red,cursor:'pointer'}}>🗑️ Hapus</button>:<div/>}
+      <div style={{display:'flex',gap:9}}>
+        <button onClick={onCancel} style={{padding:'10px 18px',background:'none',border:`1px solid ${C.ink5}`,borderRadius:9,fontSize:13,fontWeight:600,color:C.ink2,cursor:'pointer'}}>Batal</button>
+        <button onClick={onSave} disabled={saving} style={{padding:'10px 22px',background:saving?C.ink5:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:saving?'not-allowed':'pointer'}}>{saving?'Menyimpan...':(isEdit?'Simpan Perubahan':'+ Tambah Produk')}</button>
+      </div>
+    </div>
+  </div>
+}
+
+function EditProductModal({product:ep,onSave,onDelete,onClose,uploadImageFn}:{product:any,onSave:(id:string,data:any)=>void,onDelete:(id:string)=>void,onClose:()=>void,uploadImageFn:(f:File,sku:string)=>Promise<string|null>}){
+  const [data,setData]=useState<PFData>(()=>mkPFData(ep))
+  const [stock,setStock]=useState<PFStock>(()=>mkPFStock(ep))
+  const [saving,setSaving]=useState(false)
+  async function handleSave(){
+    setSaving(true)
+    const allSizes=[...Object.keys(data.apparelColors),...Object.keys(data.footwearColors)]
+    const colorsArr=Array.from(new Set(Object.values({...data.apparelColors,...data.footwearColors}).join(',').split(',').map((c:string)=>c.trim()).filter(Boolean)))
+    const payload={name:data.name,price:parseInt(data.hargaJual)||0,original:data.hargaAwal?parseInt(data.hargaAwal):null,hpp:parseInt(data.hpp)||0,description:data.desc,sport:data.sport,gender:data.gender,tags:data.extraSports?data.extraSports.split(',').map((s:string)=>s.trim()).filter(Boolean):[],sizes:allSizes,colors:colorsArr,weight:parseInt(data.weight)||500,image_url:data.imgs[0]||ep.image_url,gallery:data.imgs.filter(Boolean),size_guide_img:data.sizeGuideImg,stock}
+    await fetch(`/api/products/${ep.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    onSave(ep.id,{...ep,...payload,stock})
+    setSaving(false);onClose()
+  }
+  return <div style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',padding:12}}>
+    <div style={{background:C.white,borderRadius:16,width:'min(600px,98vw)',maxHeight:'92vh',overflowY:'auto',padding:'20px 22px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <h3 style={{margin:0,fontSize:16,fontWeight:700,color:C.ink}}>Edit Produk</h3>
+        <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:18,color:C.ink3}}>✕</button>
+      </div>
+      <ProductForm data={data} setData={setData} stock={stock} setStock={setStock} uploadFn={uploadImageFn} saving={saving} onSave={handleSave} onDelete={()=>{fetch(`/api/products/${ep.id}`,{method:'DELETE'});onDelete(ep.id);onClose()}} onCancel={onClose} isEdit={true}/>
+    </div>
+  </div>
+}
+
+
 function AdminInventory({products:initP}:{products:any[]}) {
   const [products,setProducts]=useState(initP)
   useEffect(()=>{
