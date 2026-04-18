@@ -755,7 +755,7 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           customer:{name:shippingData.firstName+' '+shippingData.lastName,email:shippingData.email,phone:shippingData.phone,address:shippingData.address,city:shippingData.city,province:shippingData.province},
-          items:cart.map((i:any)=>({id:i.id,sku:i.sku,name:i.name,size:i.size,qty:i.qty||1,price:i.price})),
+          items:cart.map((i:any)=>({id:i.id,sku:i.sku,name:i.name,size:i.size,color:i.color||'',qty:i.qty||1,price:i.price,image_url:i.image_url||null,emoji:i.emoji||''})),
           shipping:{courier:'JNE',service:selectedService?.service||'',etd:selectedService?.etd||''},
           phone:shippingData.phone,
           province:selectedDest?.province_name||shippingData.province||'',
@@ -2482,8 +2482,24 @@ export default function App() {
   const [collapsed,  setCollapsed]  = useState(false)
   const [globalCart, setGlobalCart] = useState<any[]>([])
   const [cartCount,  setCartCount]  = useState(0)
-  const [globalProducts,setGlobalProducts]=useState<any[]>(ALL_PRODUCTS) // ALL_PRODUCTS as fallback
-  const [globalOrders,setGlobalOrders]=useState<any[]>(INIT_ORDERS)
+  const [globalProducts,setGlobalProducts]=useState<any[]>(()=>{
+    try{
+      if(typeof window!=='undefined'){
+        const c=sessionStorage.getItem('tea_products')
+        if(c){const p=JSON.parse(c);if(p&&p.length>0)return p}
+      }
+    }catch(e){}
+    return ALL_PRODUCTS
+  })
+  const [globalOrders,setGlobalOrders]=useState<any[]>(()=>{
+    try{
+      if(typeof window!=='undefined'){
+        const c=sessionStorage.getItem('tea_orders')
+        if(c){const p=JSON.parse(c);if(p&&p.length>0)return p}
+      }
+    }catch(e){}
+    return INIT_ORDERS
+  })
   const [productsFetched,setProductsFetched]=useState(false)
 
   function nav(page: string, data?: any) {
@@ -2505,11 +2521,6 @@ export default function App() {
   },[])
   // Fetch products ONCE at app level - cache in sessionStorage
   useEffect(()=>{
-    // Try cache first for instant display
-    try{
-      const cached=sessionStorage.getItem('tea_products')
-      if(cached){const parsed=JSON.parse(cached);if(parsed.length>0)setGlobalProducts(parsed)}
-    }catch(e){}
     fetch('/api/products').then(r=>r.json()).then(d=>{
       if(d.data&&d.data.length>0){
         const norm=d.data.map((p:any)=>({
@@ -2531,8 +2542,6 @@ export default function App() {
       }
       setProductsFetched(true)
     }).catch(()=>setProductsFetched(true))
-    // Fetch orders - try cache first
-    try{const co=sessionStorage.getItem('tea_orders');if(co){const po=JSON.parse(co);if(po.length>0)setGlobalOrders(po)}}catch(e){}
     fetch('/api/orders').then(r=>r.json()).then(d=>{
       if(d.data&&d.data.length>0){
         const norm=d.data.map((o:any)=>({
