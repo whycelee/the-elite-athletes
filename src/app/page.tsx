@@ -1034,7 +1034,9 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
               <p style={{margin:'0 0 10px',fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.08em',textTransform:'uppercase'}}>Items</p>
               {cart.map((item:any,i:number)=>(
                 <div key={i} style={{display:'flex',gap:9,paddingBottom:9,marginBottom:9,borderBottom:`1px solid ${C.ink6}`}}>
-                  <div style={{width:40,height:40,background:C.cream,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>{item.emoji}</div>
+                  <div style={{width:40,height:40,background:C.cream,borderRadius:8,overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    {item.image_url?<img src={item.image_url} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:22}}>{item.emoji||'👕'}</span>}
+                  </div>
                   <div style={{flex:1}}><p style={{margin:'0 0 1px',fontSize:12,fontWeight:700,color:C.ink}}>{item.name}</p><p style={{margin:0,fontSize:10,color:C.ink4}}>Size {item.size} · Qty {item.qty}</p></div>
                   <span style={{fontSize:12,fontWeight:700,color:C.ink}}>{fmt(item.price*(item.qty||1))}</span>
                 </div>
