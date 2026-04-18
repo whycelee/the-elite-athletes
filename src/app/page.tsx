@@ -1979,158 +1979,229 @@ function AdminCustomers({customers:initC,orders}:{customers:any[],orders:any[]})
   </div>
 }
 
-function AdminFinancial() {
+function AdminFinancial({orders=[],products=[]}:{orders?:any[],products?:any[]}) {
   const [unlocked,setUnlocked]=useState(false)
   const [pin,setPin]=useState('')
   const [error,setError]=useState('')
   const [shake,setShake]=useState(false)
-  const [tab,setTab]=useState('pl')
-  const [period,setPeriod]=useState('ytd')
-  const [selMonth,setSelMonth]=useState('Mar')
+  const [tab,setTab]=useState('summary')
+  const [period,setPeriod]=useState('all')
+
   function pressPin(d:string){
     if(pin.length>=6)return
     const next=pin+d;setPin(next);setError('')
-    if(next.length===6){setTimeout(()=>{if(next===SUPERIOR_PIN){setUnlocked(true)}else{setShake(true);setTimeout(()=>setShake(false),500);setError('PIN salah. Coba lagi.');setPin('')}},200)}
+    if(next.length===6){setTimeout(()=>{
+      if(next===SUPERIOR_PIN){setUnlocked(true)}
+      else{setShake(true);setTimeout(()=>{setShake(false);setPin('');setError('PIN salah')},600)}
+    },200)}
   }
-  function getMF(month:string){
-    const base:Record<string,number>={Jan:0.8,Feb:0.9,Mar:1.1,Apr:0.85,May:1.0,Jun:0.95,Jul:0.8,Aug:1.2,Sep:1.0,Oct:0.9,Nov:1.3,Dec:1.5}
-    const m=base[month]||1
-    const revenue=ALL_PRODUCTS.reduce((s,p)=>s+Math.floor((20+Math.random()*10)*m)*p.price,0)
-    const hpp=ALL_PRODUCTS.reduce((s,p)=>s+Math.floor((20+Math.random()*10)*m)*p.hpp,0)
-    const gross=revenue-hpp,opex=18000000+Math.random()*4000000,ppn=revenue*PPN,net=gross-opex-ppn
-    return{revenue,hpp,gross,grossMargin:pct(gross,revenue),opex,ppn,net,netMargin:pct(net,revenue)}
+
+  // Compute from REAL orders data
+  const paidOrders=orders.filter((o:any)=>['processing','shipped','delivered'].includes(o.status))
+  const revenue=paidOrders.reduce((s:number,o:any)=>s+(o.total||0),0)
+  const shippingRevenue=paidOrders.reduce((s:number,o:any)=>s+(o.shipping_cost||0),0)
+  const productRevenue=revenue-shippingRevenue
+
+  // HPP from products matched to order items
+  function getHPP(o:any){
+    const items=Array.isArray(o.items)?o.items:(typeof o.items==='string'?JSON.parse(o.items||'[]'):[])
+    return items.reduce((s:number,item:any)=>{
+      const prod=products.find((p:any)=>p.sku===item.sku||p.id===item.id)
+      const hpp=(prod?.hpp||0)*(item.qty||1)
+      return s+hpp
+    },0)
   }
-  const months=period==='ytd'?MONTHS:period==='monthly'?[selMonth]:MONTHS.slice(0,3)
-  const data=months.map(m=>({month:m,...getMF(m)}))
-  const T={revenue:data.reduce((s,d)=>s+d.revenue,0),hpp:data.reduce((s,d)=>s+d.hpp,0),gross:data.reduce((s,d)=>s+d.gross,0),opex:data.reduce((s,d)=>s+d.opex,0),ppn:data.reduce((s,d)=>s+d.ppn,0),net:data.reduce((s,d)=>s+d.net,0)}
-  const KPI2=({label,value,accent,icon}:{label:string,value:string,accent?:string,icon?:string})=>(
-    <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:11,padding:'14px 16px',borderLeft:`3px solid ${accent||C.ink5}`}}>
-      <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><p style={{margin:0,fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.08em',textTransform:'uppercase'}}>{label}</p>{icon&&<span style={{fontSize:14}}>{icon}</span>}</div>
-      <p style={{margin:0,fontSize:21,fontWeight:800,color:C.ink,letterSpacing:'-0.03em'}}>{value}</p>
+  const totalHPP=paidOrders.reduce((s:number,o:any)=>s+getHPP(o),0)
+  const grossProfit=productRevenue-totalHPP
+  const grossMargin=productRevenue>0?Math.round(grossProfit/productRevenue*100):0
+
+  // Monthly breakdown
+  const monthlyData=MONTHS.map(m=>{
+    const mOrders=paidOrders.filter((o:any)=>{
+      const d=new Date(o.date||o.created_at||'')
+      return !isNaN(d.getTime())&&['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]===m
+    })
+    const rev=mOrders.reduce((s:number,o:any)=>s+(o.total||0),0)
+    const hpp=mOrders.reduce((s:number,o:any)=>s+getHPP(o),0)
+    return {month:MONTH_ID[m]||m,rev,hpp,profit:rev-hpp,orders:mOrders.length}
+  }).filter(m=>m.orders>0)
+
+  // Product performance
+  const prodPerf:Record<string,{name:string,sku:string,qty:number,revenue:number,hpp:number}>={}
+  paidOrders.forEach((o:any)=>{
+    const items=Array.isArray(o.items)?o.items:(typeof o.items==='string'?JSON.parse(o.items||'[]'):[])
+    items.forEach((item:any)=>{
+      const key=item.sku||item.id||item.name
+      if(!prodPerf[key]) prodPerf[key]={name:item.name,sku:item.sku||'-',qty:0,revenue:0,hpp:0}
+      const prod=products.find((p:any)=>p.sku===item.sku||p.id===item.id)
+      prodPerf[key].qty+=(item.qty||1)
+      prodPerf[key].revenue+=(item.price||0)*(item.qty||1)
+      prodPerf[key].hpp+=(prod?.hpp||0)*(item.qty||1)
+    })
+  })
+  const topProducts=Object.values(prodPerf).sort((a:any,b:any)=>b.revenue-a.revenue).slice(0,10)
+
+  if(!unlocked) return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:400,gap:20}}>
+      <div style={{textAlign:'center',marginBottom:8}}>
+        <div style={{fontSize:36,marginBottom:8}}>🔐</div>
+        <h3 style={{margin:'0 0 4px',fontSize:18,fontWeight:700,color:C.ink}}>Financial Report</h3>
+        <p style={{margin:0,fontSize:13,color:C.ink4}}>Masukkan PIN untuk akses laporan keuangan</p>
+      </div>
+      <div style={{display:'flex',gap:10,marginBottom:4}}>
+        {[0,1,2,3,4,5].map(i=><div key={i} style={{width:14,height:14,borderRadius:'50%',background:pin.length>i?C.g700:C.ink6,transition:'background 0.15s'}}/>)}
+      </div>
+      {error&&<p style={{margin:0,fontSize:12,color:C.red,fontWeight:600}}>{error}</p>}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,72px)',gap:10,animation:shake?'shake 0.6s':''}} >
+        {['1','2','3','4','5','6','7','8','9','','0','⌫'].map(d=>(
+          <button key={d} onClick={()=>d==='⌫'?setPin(p=>p.slice(0,-1)):d?pressPin(d):null} disabled={!d} style={{height:72,borderRadius:14,background:d?C.white:C.cream,border:`1px solid ${C.ink5}`,fontSize:d==='⌫'?20:22,fontWeight:600,cursor:d?'pointer':'default',color:C.ink,transition:'all 0.1s'}}>{d}</button>
+        ))}
+      </div>
     </div>
   )
-  if(!unlocked) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'65vh'}}>
-    <div style={{width:'min(340px,90vw)',display:'flex',flexDirection:'column',alignItems:'center',gap:22}}>
-      <div style={{textAlign:'center'}}>
-        <div style={{width:50,height:50,background:C.g600,borderRadius:13,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><svg width="25" height="25" viewBox="0 0 20 20" fill="none"><path d="M10 2L12.5 7.5H18L13.5 11L15.5 17L10 13.5L4.5 17L6.5 11L2 7.5H7.5L10 2Z" fill={C.g200}/></svg></div>
-        <h2 style={{margin:'0 0 4px',fontSize:19,fontWeight:700,color:C.ink}}>Financial Reports</h2>
-        <p style={{margin:0,fontSize:13,color:C.ink4}}>Superior Admin — Masukkan PIN 6 digit</p>
-      </div>
-      <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:16,padding:'22px 26px 24px',width:'100%'}}>
-        <div style={{display:'flex',justifyContent:'center',gap:12,marginBottom:error?10:18,animation:shake?'shake 0.4s ease':'none'}}>
-          {[0,1,2,3,4,5].map(i=><div key={i} style={{width:12,height:12,borderRadius:'50%',background:i<pin.length?C.g400:'rgba(0,0,0,0.08)',border:`2px solid ${i<pin.length?C.g400:C.ink5}`,transition:'all 0.15s',transform:i<pin.length?'scale(1.15)':'scale(1)'}}/>)}
-        </div>
-        {error&&<p style={{textAlign:'center',fontSize:12,color:C.red,marginBottom:12,fontWeight:500}}>{error}</p>}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8}}>
-          {[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map((k,i)=>(
-            <button key={i} onClick={()=>k==='⌫'?setPin(p=>p.slice(0,-1)):k!==''&&pressPin(String(k))} style={{height:50,borderRadius:11,border:`1px solid ${C.ink6}`,cursor:k===''?'default':'pointer',background:k===''?'transparent':C.white,color:C.ink2,fontSize:18,fontWeight:600,fontFamily:'inherit',opacity:k===''?0:1,transition:'background 0.12s'}}
-              onMouseEnter={e=>{if(k!=='')(e.currentTarget as HTMLElement).style.background=C.cream}}
-              onMouseLeave={e=>{if(k!=='')(e.currentTarget as HTMLElement).style.background=C.white}}
-            >{k}</button>
-          ))}
-        </div>
-      </div>
-      <p style={{fontSize:11,color:C.ink5,margin:0}}>Demo PIN: 0 8 2 5 0 5</p>
+
+  const hasData=paidOrders.length>0
+
+  return <div style={{display:'flex',flexDirection:'column',gap:16}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <h3 style={{margin:0,fontSize:16,fontWeight:700,color:C.ink}}>📊 Financial Report</h3>
+      <button onClick={()=>{setUnlocked(false);setPin('')}} style={{padding:'6px 12px',background:C.cream,border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:11,fontWeight:600,color:C.ink3,cursor:'pointer'}}>🔒 Lock</button>
     </div>
-  </div>
-  return <div style={{display:'flex',flexDirection:'column',gap:18}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
-      <div><div style={{display:'flex',alignItems:'center',gap:9,marginBottom:3}}><h1 style={{margin:0,fontSize:19,fontWeight:700,color:C.ink}}>Financial Reports</h1><span style={{fontSize:10,fontWeight:800,background:C.gold,color:'#fff',padding:'2px 8px',borderRadius:4,letterSpacing:'0.06em'}}>SUPERIOR</span></div><p style={{margin:0,fontSize:13,color:C.ink4}}>P&L, analisis produk, PPN, dan cash flow</p></div>
-      <div style={{display:'flex',gap:7,alignItems:'center',flexWrap:'wrap'}}>
-        {['ytd','monthly'].map(p=><button key={p} onClick={()=>setPeriod(p)} style={{padding:'7px 13px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',background:period===p?C.g800:C.white,color:period===p?'#fff':C.ink3,border:`1px solid ${period===p?C.g800:C.ink5}`,transition:'all 0.15s'}}>{{ytd:'Year-to-Date',monthly:'Bulanan'}[p]}</button>)}
-        {period==='monthly'&&<select value={selMonth} onChange={e=>setSelMonth(e.target.value)} style={{padding:'7px 11px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',background:C.white,cursor:'pointer',color:C.ink2}}>{MONTHS.map(m=><option key={m} value={m}>{MONTH_ID[m]} 2025</option>)}</select>}
-        <button onClick={()=>{
-          if(tab==='pl'){
-            exportCSV('financial_pl_'+new Date().toISOString().slice(0,10),
-              ['Item','Jumlah','Persen Revenue'],
-              [['Revenue Bersih',T.revenue,'100%'],['HPP / COGS',T.hpp,pct(T.hpp,T.revenue).toFixed(1)+'%'],['Gross Profit',T.gross,pct(T.gross,T.revenue).toFixed(1)+'%'],['OPEX',T.opex,pct(T.opex,T.revenue).toFixed(1)+'%'],['PPN 11%',T.ppn,'11.0%'],['Net Profit',T.net,pct(T.net,T.revenue).toFixed(1)+'%']]
-            )
-          } else if(tab==='products'){
-            exportCSV('financial_products_'+new Date().toISOString().slice(0,10),
-              ['Produk','Harga','HPP','Gross Margin %','PPN/Unit','Net/Unit'],
-              ALL_PRODUCTS.map(p=>{const gm=p.price-p.hpp;return[p.name,p.price,p.hpp,pct(gm,p.price).toFixed(1)+'%',Math.round(p.price*PPN),Math.round(gm-p.price*PPN)]})
-            )
-          } else {
-            exportCSV('financial_monthly_'+new Date().toISOString().slice(0,10),
-              ['Bulan','Revenue','HPP','Gross Profit','GP%','OPEX','PPN','Net Profit','Net%'],
-              MONTHS.map(m=>{const d=getMF(m);return[MONTH_ID[m],d.revenue,d.hpp,d.gross,d.grossMargin.toFixed(1)+'%',d.opex,d.ppn,d.net,d.netMargin.toFixed(1)+'%']})
-            )
-          }
-        }} style={{background:C.g800,color:'#fff',border:'none',borderRadius:8,padding:'7px 13px',fontSize:11,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',gap:5}}>📥 Export Excel</button>
-        <button onClick={()=>setUnlocked(false)} style={{background:'none',border:`1px solid ${C.ink5}`,borderRadius:8,padding:'7px 13px',fontSize:11,fontWeight:600,color:C.ink4,cursor:'pointer'}}>🔒 Lock</button>
-      </div>
-    </div>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:9}}>
-      <KPI2 label="Revenue" value={fmtM(T.revenue)} accent={C.g600} icon="📈"/>
-      <KPI2 label="Gross Profit" value={fmtM(T.gross)} accent={C.g500}/>
-      <KPI2 label="Net Profit" value={fmtM(T.net)} accent={T.net>0?C.g400:C.red}/>
-      <KPI2 label="HPP / COGS" value={fmtM(T.hpp)} icon="🏭"/>
-      <KPI2 label="PPN Terutang" value={fmtM(T.ppn)} accent={C.amber} icon="🏛️"/>
-      <KPI2 label="OPEX Est." value={fmtM(T.opex)} icon="💼"/>
-    </div>
-    <div style={{display:'flex',gap:2,background:C.white,border:`1px solid ${C.ink6}`,borderRadius:11,padding:3,width:'fit-content'}}>
-      {[['pl','📊 P&L'],['products','📦 Per Produk'],['monthly','📅 Bulanan']].map(([id,label])=>(
-        <button key={id} onClick={()=>setTab(id)} style={{padding:'7px 14px',borderRadius:8,border:'none',cursor:'pointer',background:tab===id?C.g800:'transparent',color:tab===id?'#fff':C.ink3,fontSize:12,fontWeight:tab===id?700:500,transition:'all 0.15s'}}>{label}</button>
-      ))}
-    </div>
-    {tab==='pl'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,overflow:'auto'}}>
-      <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
-        <thead><tr style={{background:C.cream,borderBottom:`1px solid ${C.ink6}`}}>{['Item','Jumlah','% Revenue'].map(h=><th key={h} style={{padding:'10px 15px',textAlign:'left',fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.07em',textTransform:'uppercase'}}>{h}</th>)}</tr></thead>
-        <tbody>
-          {[['Revenue Bersih',T.revenue,'100%',C.ink,false],['(-) HPP / COGS',T.hpp,pct(T.hpp,T.revenue).toFixed(1)+'%',C.red,false],['= Gross Profit',T.gross,pct(T.gross,T.revenue).toFixed(1)+'%',C.g700,true],['(-) OPEX',T.opex,pct(T.opex,T.revenue).toFixed(1)+'%',C.amber,false],['(-) PPN 11%',T.ppn,'11.0%',C.amber,false],['= Net Profit',T.net,pct(T.net,T.revenue).toFixed(1)+'%',T.net>0?C.g700:C.red,true]].map(([label,val,pctVal,color,bold]:any,i:number)=>(
-            <tr key={i} style={{borderBottom:`1px solid ${C.ink6}`,background:bold?C.g50:i%2===0?C.white:C.cream}}>
-              <td style={{padding:'10px 15px',fontWeight:bold?700:500,color:C.ink}}>{label}</td>
-              <td style={{padding:'10px 15px',fontWeight:bold?800:600,color,textAlign:'right'}}>{label.includes('(')?`(${fmt(val)})`:fmt(val)}</td>
-              <td style={{padding:'10px 15px',fontSize:12,color:C.ink4,textAlign:'right'}}>{pctVal}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+
+    {!hasData&&<div style={{background:C.amberBg,border:`1px solid ${C.amber}30`,borderRadius:12,padding:'20px',textAlign:'center'}}>
+      <div style={{fontSize:32,marginBottom:8}}>📭</div>
+      <p style={{margin:'0 0 4px',fontSize:14,fontWeight:700,color:C.amber}}>Belum ada data transaksi</p>
+      <p style={{margin:0,fontSize:12,color:C.ink4}}>Data laporan akan muncul otomatis setelah ada order dengan status Paid (Processing/Shipped/Done)</p>
     </div>}
-    {tab==='products'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,overflow:'auto'}}>
-      <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
-        <thead><tr style={{background:C.cream,borderBottom:`1px solid ${C.ink6}`}}>{['Produk','Harga','HPP','Gross Margin','PPN/Unit','Net/Unit'].map(h=><th key={h} style={{padding:'10px 13px',textAlign:'left',fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.07em',textTransform:'uppercase',whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
-        <tbody>
-          {ALL_PRODUCTS.map((p,i)=>{
-            const gm=p.price-p.hpp,gmPct=pct(gm,p.price),ppnPer=p.price*PPN,netPer=gm-ppnPer
-            return <tr key={p.id} style={{borderBottom:`1px solid ${C.ink6}`,background:i%2===0?C.white:C.cream}}>
-              <td style={{padding:'10px 13px'}}><div style={{display:'flex',alignItems:'center',gap:7}}><span style={{fontSize:17}}>{p.emoji}</span><span style={{fontWeight:700,color:C.ink}}>{p.name}</span></div></td>
-              <td style={{padding:'10px 13px',fontWeight:600,color:C.ink}}>{fmt(p.price)}</td>
-              <td style={{padding:'10px 13px',color:C.red}}>({fmt(p.hpp)})</td>
-              <td style={{padding:'10px 13px'}}><span style={{fontWeight:700,fontSize:12,color:gmPct>55?C.g500:gmPct>40?C.gold:C.red,background:gmPct>55?C.g50:gmPct>40?C.goldBg:C.redBg,padding:'2px 7px',borderRadius:4}}>{gmPct.toFixed(1)}%</span></td>
-              <td style={{padding:'10px 13px',color:C.amber}}>({fmt(ppnPer)})</td>
-              <td style={{padding:'10px 13px',fontWeight:700,color:netPer>0?C.g700:C.red}}>{fmt(netPer)}</td>
-            </tr>
-          })}
-        </tbody>
-      </table>
-    </div>}
-    {tab==='monthly'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,overflow:'auto'}}>
-      <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
-        <thead><tr style={{background:C.cream,borderBottom:`1px solid ${C.ink6}`}}>{['Bulan','Revenue','HPP','Gross','GP%','OPEX','PPN','Net','Net%'].map(h=><th key={h} style={{padding:'9px 12px',textAlign:'left',fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.07em',textTransform:'uppercase',whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
-        <tbody>
-          {MONTHS.map((m,i)=>{const d=getMF(m);return(
-            <tr key={m} style={{borderBottom:`1px solid ${C.ink6}`,background:i%2===0?C.white:C.cream}}>
-              <td style={{padding:'9px 12px',fontWeight:600,color:C.ink}}>{MONTH_ID[m]}</td>
-              <td style={{padding:'9px 12px',fontWeight:600,color:C.g600}}>{fmtM(d.revenue)}</td>
-              <td style={{padding:'9px 12px',color:C.red}}>({fmtM(d.hpp)})</td>
-              <td style={{padding:'9px 12px',color:C.g700,fontWeight:600}}>{fmtM(d.gross)}</td>
-              <td style={{padding:'9px 12px'}}><span style={{fontSize:11,fontWeight:700,color:d.grossMargin>55?C.g500:d.grossMargin>40?C.gold:C.red}}>{d.grossMargin.toFixed(1)}%</span></td>
-              <td style={{padding:'9px 12px',color:C.amber}}>({fmtM(d.opex)})</td>
-              <td style={{padding:'9px 12px',color:C.ink4}}>({fmtM(d.ppn)})</td>
-              <td style={{padding:'9px 12px',fontWeight:700,color:d.net>0?C.g700:C.red}}>{fmtM(d.net)}</td>
-              <td style={{padding:'9px 12px'}}><span style={{fontSize:11,fontWeight:700,color:d.netMargin>15?C.g500:d.netMargin>5?C.amber:C.red}}>{d.netMargin.toFixed(1)}%</span></td>
-            </tr>
-          )})}
-        </tbody>
-      </table>
-    </div>}
+
+    {hasData&&<>
+      {/* SUMMARY CARDS */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12}}>
+        {[
+          {l:'Total Revenue',v:fmt(revenue),sub:`${paidOrders.length} order paid`,col:C.g700,bg:'#D1FAE5'},
+          {l:'HPP / Modal',v:fmt(totalHPP),sub:'Cost of goods sold',col:C.amber,bg:C.amberBg},
+          {l:'Gross Profit',v:fmt(grossProfit),sub:`${grossMargin}% margin`,col:grossProfit>0?C.g700:C.red,bg:grossProfit>0?'#D1FAE5':C.redBg},
+          {l:'Ongkir Collected',v:fmt(shippingRevenue),sub:'Total biaya kirim customer',col:C.blue,bg:C.blueBg},
+        ].map(card=>(
+          <div key={card.l} style={{background:card.bg,borderRadius:12,padding:'16px 18px',border:`1px solid ${card.col}20`}}>
+            <p style={{margin:'0 0 4px',fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.06em',textTransform:'uppercase'}}>{card.l}</p>
+            <p style={{margin:'0 0 2px',fontSize:22,fontWeight:800,color:card.col}}>{card.v}</p>
+            <p style={{margin:0,fontSize:11,color:C.ink4}}>{card.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* TABS */}
+      <div style={{display:'flex',gap:7}}>
+        {[['summary','📋 Summary'],['monthly','📅 Per Bulan'],['products','📦 Per Produk'],['orders','🧾 Order List']].map(([id,label])=>(
+          <button key={id} onClick={()=>setTab(id)} style={{padding:'7px 14px',borderRadius:9,fontSize:12,fontWeight:tab===id?700:500,cursor:'pointer',background:tab===id?C.g800:C.white,color:tab===id?'#fff':C.ink2,border:`1px solid ${tab===id?C.g800:C.ink5}`}}>{label}</button>
+        ))}
+      </div>
+
+      {/* SUMMARY TAB */}
+      {tab==='summary'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,padding:'18px 20px'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+          <tbody>
+            {[
+              ['Total Orders Paid',String(paidOrders.length)+' order'],
+              ['Gross Revenue',fmt(revenue)],
+              ['Shipping Revenue',fmt(shippingRevenue)],
+              ['Product Revenue',fmt(productRevenue)],
+              ['',''],
+              ['Total HPP',fmt(totalHPP)],
+              ['Gross Profit',fmt(grossProfit)],
+              ['Gross Margin',grossMargin+'%'],
+            ].map(([l,v],i)=>l?
+              <tr key={i} style={{borderBottom:`1px solid ${C.ink6}`,background:l.includes('Profit')||l.includes('Margin')?'#F0FDF4':C.white}}>
+                <td style={{padding:'10px 14px',color:C.ink3,fontWeight:500}}>{l}</td>
+                <td style={{padding:'10px 14px',textAlign:'right',fontWeight:700,color:l.includes('Profit')?C.g700:C.ink}}>{v}</td>
+              </tr>
+              :<tr key={i}><td colSpan={2} style={{padding:'4px'}}></td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>}
+
+      {/* MONTHLY TAB */}
+      {tab==='monthly'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,overflow:'auto'}}>
+        {monthlyData.length===0
+          ?<p style={{padding:'24px',textAlign:'center',color:C.ink4,margin:0}}>Belum ada data per bulan</p>
+          :<table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+            <thead><tr style={{background:C.g800,color:'#fff'}}>
+              {['Bulan','Orders','Revenue','HPP','Gross Profit','Margin'].map(h=><th key={h} style={{padding:'10px 14px',textAlign:h==='Bulan'?'left':'right',fontWeight:600,fontSize:11}}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {monthlyData.map((m:any,i:number)=>{
+                const margin=m.rev>0?Math.round(m.profit/m.rev*100):0
+                return <tr key={m.month} style={{borderBottom:`1px solid ${C.ink6}`,background:i%2===0?C.white:C.cream}}>
+                  <td style={{padding:'10px 14px',fontWeight:600,color:C.ink}}>{m.month}</td>
+                  <td style={{padding:'10px 14px',textAlign:'right',color:C.ink3}}>{m.orders}</td>
+                  <td style={{padding:'10px 14px',textAlign:'right',fontWeight:700,color:C.ink}}>{fmt(m.rev)}</td>
+                  <td style={{padding:'10px 14px',textAlign:'right',color:C.amber}}>{fmt(m.hpp)}</td>
+                  <td style={{padding:'10px 14px',textAlign:'right',fontWeight:700,color:m.profit>0?C.g700:C.red}}>{fmt(m.profit)}</td>
+                  <td style={{padding:'10px 14px',textAlign:'right',color:margin>30?C.g700:margin>15?C.amber:C.red}}>{margin}%</td>
+                </tr>
+              })}
+            </tbody>
+          </table>
+        }
+      </div>}
+
+      {/* PRODUCTS TAB */}
+      {tab==='products'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,overflow:'auto'}}>
+        {topProducts.length===0
+          ?<p style={{padding:'24px',textAlign:'center',color:C.ink4,margin:0}}>Belum ada data produk</p>
+          :<table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+            <thead><tr style={{background:C.g800,color:'#fff'}}>
+              {['SKU','Nama Produk','Qty Terjual','Revenue','HPP','Profit','Margin'].map(h=><th key={h} style={{padding:'10px 14px',textAlign:h==='SKU'||h==='Nama Produk'?'left':'right',fontWeight:600,fontSize:11}}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {topProducts.map((p:any,i:number)=>{
+                const margin=p.revenue>0?Math.round(p.profit/p.revenue*100):0
+                return <tr key={p.sku} style={{borderBottom:`1px solid ${C.ink6}`,background:i%2===0?C.white:C.cream}}>
+                  <td style={{padding:'10px 14px',fontSize:11,color:C.ink4,fontFamily:'monospace'}}>{p.sku}</td>
+                  <td style={{padding:'10px 14px',fontWeight:600,color:C.ink}}>{p.name}</td>
+                  <td style={{padding:'10px 14px',textAlign:'right',fontWeight:700,color:C.g700}}>{p.qty}</td>
+                  <td style={{padding:'10px 14px',textAlign:'right',color:C.ink}}>{fmt(p.revenue)}</td>
+                  <td style={{padding:'10px 14px',textAlign:'right',color:C.amber}}>{fmt(p.hpp)}</td>
+                  <td style={{padding:'10px 14px',textAlign:'right',fontWeight:700,color:p.profit>0?C.g700:C.red}}>{fmt(p.profit)}</td>
+                  <td style={{padding:'10px 14px',textAlign:'right',color:margin>30?C.g700:margin>15?C.amber:C.red}}>{margin}%</td>
+                </tr>
+              })}
+            </tbody>
+          </table>
+        }
+      </div>}
+
+      {/* ORDERS TAB */}
+      {tab==='orders'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:12,overflow:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+          <thead><tr style={{background:C.g800,color:'#fff'}}>
+            {['Order ID','Tanggal','Customer','Payment','Subtotal','Ongkir','Total','HPP','Profit'].map(h=><th key={h} style={{padding:'10px 12px',textAlign:h==='Order ID'||h==='Tanggal'||h==='Customer'||h==='Payment'?'left':'right',fontWeight:600,fontSize:11,whiteSpace:'nowrap'}}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {paidOrders.map((o:any,i:number)=>{
+              const hpp=getHPP(o)
+              const profit=(o.total||0)-hpp
+              return <tr key={o.id} style={{borderBottom:`1px solid ${C.ink6}`,background:i%2===0?C.white:C.cream}}>
+                <td style={{padding:'9px 12px',fontWeight:700,color:C.g700,fontSize:12}}>{o.id}</td>
+                <td style={{padding:'9px 12px',color:C.ink3,fontSize:11,whiteSpace:'nowrap'}}>{o.date&&!isNaN(new Date(o.date).getTime())?new Date(o.date).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'2-digit'}):'-'}</td>
+                <td style={{padding:'9px 12px',fontWeight:600,color:C.ink}}>{o.customerName||'-'}</td>
+                <td style={{padding:'9px 12px',fontSize:11,color:C.ink3}}>{o.payment||'-'}</td>
+                <td style={{padding:'9px 12px',textAlign:'right',color:C.ink}}>{fmt((o.total||0)-(o.shipping_cost||0))}</td>
+                <td style={{padding:'9px 12px',textAlign:'right',color:C.ink3}}>{fmt(o.shipping_cost||0)}</td>
+                <td style={{padding:'9px 12px',textAlign:'right',fontWeight:700,color:C.ink}}>{fmt(o.total||0)}</td>
+                <td style={{padding:'9px 12px',textAlign:'right',color:C.amber}}>{fmt(hpp)}</td>
+                <td style={{padding:'9px 12px',textAlign:'right',fontWeight:700,color:profit>0?C.g700:C.red}}>{fmt(profit)}</td>
+              </tr>
+            })}
+          </tbody>
+        </table>
+      </div>}
+    </>}
   </div>
 }
 
-// ═══════════════════════════════════════════════════════════
-// ADMIN: CONTENT MANAGEMENT
-// ═══════════════════════════════════════════════════════════
 function AdminContent() {
   const [tab,setTab]=useState('announcement')
   const [announcement,setAnnouncement]=useState(SITE_CONTENT.announcement.replace(/<[^>]+>/g,'').replace(/&#39;/g,"'"))
@@ -2611,8 +2682,8 @@ export default function App() {
         {adminPage==='overview'     && <AdminOverview     products={globalProducts} orders={globalOrders} customers={INIT_CUSTOMERS}/>}
         {adminPage==='orders'       && <AdminOrders       orders={globalOrders} products={globalProducts}/>}
         {adminPage==='inventory'    && <AdminInventory    products={globalProducts}/>}
-        {adminPage==='customers'    && <AdminCustomers    customers={INIT_CUSTOMERS} orders={INIT_ORDERS}/>}
-        {adminPage==='financial'    && <AdminFinancial/>}
+        {adminPage==='customers'    && <AdminCustomers    customers={INIT_CUSTOMERS} orders={globalOrders}/>}
+        {adminPage==='financial'    && <AdminFinancial orders={globalOrders} products={globalProducts}/>}
         {adminPage==='content'      && <AdminContent/>}
         {adminPage==='integrations' && <AdminIntegrations/>}
       </AdminLayout>
