@@ -8,7 +8,22 @@ export async function GET() {
       .select('*')
       .order('created_at', { ascending: false })
     if (error) throw error
-    return NextResponse.json({ data })
+
+    // Normalize to consistent field names for frontend
+    const normalized = (data || []).map((o: any) => ({
+      ...o,
+      customerName: o.customer_name || o.customerName || '',
+      phone: o.phone || o.customer_phone || '',
+      address: o.address || o.shipping_address || '',
+      city: o.city || o.shipping_city || '',
+      province: o.province || o.shipping_province || '',
+      payment: o.payment || o.payment_method || '',
+      resi: o.resi || o.tracking_number || '',
+      items: typeof o.items === 'string' ? JSON.parse(o.items || '[]') : (o.items || []),
+      date: o.date || o.created_at || new Date().toISOString(),
+    }))
+
+    return NextResponse.json({ data: normalized })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
@@ -19,50 +34,43 @@ export async function POST(req: Request) {
     const body = await req.json()
     const { order_id, customer, items, subtotal, discount, shipping_cost, total, shipping, phone, province } = body
 
-    // Build insert with only safe columns
     const insertData: any = {
-      id: order_id,
+      // Core fields - match exact column names in Supabase
       customer_name: customer?.name || '',
       customer_email: customer?.email || '',
-      phone: customer?.phone || phone || '',
-      province: customer?.province || province || '',
-      items: JSON.stringify(items || []),
-      subtotal: subtotal || 0,
-      discount: discount || 0,
-      shipping_cost: shipping_cost || 0,
+      customer_phone: customer?.phone || phone || '',
+      shipping_address: customer?.address || '',
+      shipping_city: customer?.city || '',
+      shipping_province: customer?.province || province || '',
       shipping_courier: shipping?.courier || '',
       shipping_service: shipping?.service || '',
+      items: JSON.stringify(items || []),
       total: total || 0,
       status: 'pending',
-      payment: null,
     }
 
-    // Try adding optional columns one by one
-    const optionalCols: Record<string,any> = {
-      address: customer?.address || '',
-      city: customer?.city || '',
-      coupon: body.coupon || null,
-      resi: null,
-      paid_at: null,
+    // Add optional numeric columns
+    if (subtotal !== undefined) insertData.subtotal = subtotal
+    if (discount !== undefined) insertData.discount = discount
+    if (shipping_cost !== undefined) insertData.shipping_cost = shipping_cost
+
+    // Use midtrans_order_id if column exists, fallback to id
+    if (order_id) {
+      insertData.midtrans_order_id = order_id
+      // Try setting id too
+      try { insertData.id = order_id } catch {}
     }
 
-    // First try with all optional cols
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('orders')
-        .insert({ ...insertData, ...optionalCols })
-        .select().single()
-      if (error) throw error
-      return NextResponse.json({ data, order_id })
-    } catch {
-      // Retry with only base columns
-      const { data, error } = await supabaseAdmin
-        .from('orders')
-        .insert(insertData)
-        .select().single()
-      if (error) throw error
-      return NextResponse.json({ data, order_id })
-    }
+    if (body.coupon) insertData.promo_code = body.coupon
+
+    const { data, error } = await supabaseAdmin
+      .from('orders')
+      .insert(insertData)
+      .select()
+      .single()
+
+    if (error) throw error
+    return NextResponse.json({ data, order_id: data.id || order_id })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
@@ -73,13 +81,22 @@ export async function PATCH(req: Request) {
     const body = await req.json()
     const { id, status, resi, payment, paid_at } = body
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
     const updateData: any = {}
     if (status !== undefined) updateData.status = status
-    if (resi !== undefined) updateData.resi = resi
-    if (payment !== undefined) updateData.payment = payment
+    if (resi !== undefined) {
+      updateData.resi = resi
+      updateData.tracking_number = resi
+    }
+    if (payment !== undefined) {
+      updateData.payment = payment
+      updateData.payment_method = payment
+    }
     if (paid_at !== undefined) updateData.paid_at = paid_at
+
     const { data, error } = await supabaseAdmin
       .from('orders').update(updateData).eq('id', id).select().single()
+
     if (error) throw error
     return NextResponse.json({ data })
   } catch (e: any) {

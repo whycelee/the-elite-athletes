@@ -2686,18 +2686,20 @@ export default function App() {
       if(d.data&&d.data.length>0){
         const norm=d.data.map((o:any)=>({
           ...o,
-          id:o.id||o.order_id,
-          customerName:o.customerName||o.customer_name||o.customers?.name||'',
-          date:o.date||o.created_at||o.createdAt||new Date().toISOString(),
-          phone:o.phone||o.customers?.phone||'',
-          address:o.address||o.customers?.address||'',
-          province:o.province||o.customers?.province||'',
-          payment:o.payment||o.payment_method||'',
-          total:o.total||o.grand_total||0,
+          id:o.id||o.midtrans_order_id||o.order_id,
+          customerName:o.customer_name||o.customerName||'',
+          date:o.created_at||o.date||new Date().toISOString(),
+          phone:o.customer_phone||o.phone||'',
+          address:o.shipping_address||o.address||'',
+          city:o.shipping_city||o.city||'',
+          province:o.shipping_province||o.province||'',
+          payment:o.payment_method||o.payment||'',
+          total:o.total||0,
           status:o.status||'pending',
-          resi:o.resi||'',
+          resi:o.tracking_number||o.resi||'',
+          shipping_courier:o.shipping_courier||'jne',
           paid_at:o.paid_at||null,
-          items:typeof o.items==='string'?JSON.parse(o.items||'[]'):(o.items||[]),
+          items:typeof o.items==='string'?JSON.parse(o.items||'[]'):(Array.isArray(o.items)?o.items:[]),
         }))
         setGlobalOrders(norm)
         try{sessionStorage.setItem('tea_orders',JSON.stringify(norm))}catch(e){}
