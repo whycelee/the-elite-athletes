@@ -739,7 +739,8 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
   const [destResults,setDestResults]=useState<any[]>([])
   const [destLoading,setDestLoading]=useState(false)
   const [selectedDest,setSelectedDest]=useState<any>(null)
-  const [jneServices,setJneServices]=useState<any[]>([])
+  const [shippingServices,setShippingServices]=useState<any[]>([])  
+  const [selectedCourier,setSelectedCourier]=useState<'jne'|'wahana'>('jne')
   const [shippingLoading,setShippingLoading]=useState(false)
   const [selectedService,setSelectedService]=useState<any>(null)
   const subtotal=cart.reduce((s:number,i:any)=>s+i.price*(i.qty||1),0)
@@ -756,7 +757,7 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
         body:JSON.stringify({
           customer:{name:shippingData.firstName+' '+shippingData.lastName,email:shippingData.email,phone:shippingData.phone,address:shippingData.address,city:shippingData.city,province:shippingData.province},
           items:cart.map((i:any)=>({id:i.id,sku:i.sku,name:i.name,size:i.size,color:i.color||'',qty:i.qty||1,price:i.price,image_url:i.image_url||null,emoji:i.emoji||''})),
-          shipping:{courier:'JNE',service:selectedService?.service||'',etd:selectedService?.etd||''},
+          shipping:{courier:selectedService?.courierName||'JNE',courierCode:selectedService?.courierCode||'jne',service:selectedService?.service||'',etd:selectedService?.etd||''},
           phone:shippingData.phone,
           province:selectedDest?.province_name||shippingData.province||'',
           promo_code:coupon||null,
@@ -954,8 +955,9 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
                   const val=e.target.value
                   setDestSearch(val)
                   setSelectedDest(null)
-                  setJneServices([])
+                  setShippingServices([])
                   setSelectedService(null)
+                  setSelectedCourier('jne')
                   if(val.length<2){setDestResults([]);return}
                   setDestLoading(true)
                   try{
@@ -973,12 +975,19 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
                       setDestSearch(`${r.subdistrict_name}, ${r.city_name}`)
                       setDestResults([])
                       setShippingData((d:any)=>({...d,city:r.city_name,province:r.province_name,destId:r.id}))
-                      // Fetch JNE rates
+                      // Fetch JNE + Wahana rates
                       setShippingLoading(true)
                       try{
-                        const res=await fetch('/api/shipping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({destination:r.id,weight:cart.reduce((s:number,item:any)=>(s+(item.weight||500)*(item.qty||1)),0)})})
-                        const data=await res.json()
-                        setJneServices(data.data||[])
+                        const w=cart.reduce((s:number,item:any)=>(s+(item.weight||500)*(item.qty||1)),0)
+                        const [jneRes,wahanaRes]=await Promise.all([
+                          fetch('/api/shipping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({destination:r.id,weight:w,courier:'jne'})}),
+                          fetch('/api/shipping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({destination:r.id,weight:w,courier:'wahana'})})
+                        ])
+                        const jneData=await jneRes.json()
+                        const wahanaData=await wahanaRes.json()
+                        const jne=(jneData.data||[]).map((s:any)=>({...s,courierCode:'jne',courierName:'JNE'}))
+                        const wahana=(wahanaData.data||[]).map((s:any)=>({...s,courierCode:'wahana',courierName:'Wahana'}))
+                        setShippingServices([...jne,...wahana])
                       }catch(e){}
                       setShippingLoading(false)
                     }} style={{padding:'9px 14px',cursor:'pointer',borderBottom:`1px solid ${C.ink6}`}} onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background=C.cream} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=''}>
@@ -990,22 +999,35 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
                 {selectedDest&&<div style={{marginTop:6,fontSize:11,color:C.g600,fontWeight:600}}>✓ {selectedDest.subdistrict_name}, {selectedDest.city_name}</div>}
               </div>
             </div>
-            {/* JNE SERVICES */}
+            {/* SHIPPING SERVICES */}
             <div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:13,padding:'18px 20px',display:'flex',flexDirection:'column',gap:9}}>
-              <p style={{margin:'0 0 3px',fontSize:11,fontWeight:700,color:C.ink4,letterSpacing:'0.08em',textTransform:'uppercase'}}>Layanan JNE</p>
-              {!selectedDest&&<p style={{margin:0,fontSize:12,color:C.ink4,fontStyle:'italic'}}>Pilih kota tujuan dulu untuk melihat tarif JNE</p>}
-              {shippingLoading&&<div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:16,height:16,border:`2px solid ${C.g300}`,borderTopColor:C.g700,borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/><span style={{fontSize:12,color:C.ink4}}>Mengambil tarif JNE...</span></div>}
-              {jneServices.map((svc:any)=>(
-                <label key={svc.service} onClick={()=>{setSelectedService(svc);setShippingData((d:any)=>({...d,shipping:svc.service,shippingLabel:`JNE ${svc.service}`}))}} style={{display:'flex',alignItems:'center',gap:11,padding:'12px 14px',border:`1.5px solid ${selectedService?.service===svc.service?C.g500:C.ink6}`,background:selectedService?.service===svc.service?C.g50:C.white,borderRadius:11,cursor:'pointer',transition:'all 0.15s'}}>
-                  <div style={{width:17,height:17,borderRadius:'50%',border:`2px solid ${selectedService?.service===svc.service?C.g600:C.ink4}`,background:selectedService?.service===svc.service?C.g600:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>{selectedService?.service===svc.service&&<div style={{width:6,height:6,borderRadius:'50%',background:'#fff'}}/>}</div>
-                  <span style={{fontSize:16}}>📦</span>
-                  <div style={{flex:1}}>
-                    <p style={{margin:'0 0 1px',fontSize:13,fontWeight:700,color:C.ink}}>JNE {svc.service}</p>
-                    <p style={{margin:0,fontSize:11,color:C.ink4}}>{svc.description} · {svc.etd}</p>
-                  </div>
-                  <span style={{fontSize:13,fontWeight:800,color:selectedService?.service===svc.service?C.g700:C.ink}}>{fmt(svc.cost)}</span>
-                </label>
-              ))}
+              <p style={{margin:'0 0 3px',fontSize:11,fontWeight:700,color:C.ink4,letterSpacing:'0.08em',textTransform:'uppercase'}}>Layanan Pengiriman</p>
+              {!selectedDest&&<p style={{margin:0,fontSize:12,color:C.ink4,fontStyle:'italic'}}>Pilih kota tujuan dulu untuk melihat tarif</p>}
+              {shippingLoading&&<div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:16,height:16,border:`2px solid ${C.g300}`,borderTopColor:C.g700,borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/><span style={{fontSize:12,color:C.ink4}}>Mengambil tarif...</span></div>}
+              {!shippingLoading&&selectedDest&&shippingServices.length===0&&<p style={{margin:0,fontSize:12,color:C.ink4,fontStyle:'italic'}}>Tidak ada layanan tersedia untuk tujuan ini</p>}
+              {/* Group by courier */}
+              {(['jne','wahana'] as const).map(courier=>{
+                const svcs=shippingServices.filter((s:any)=>s.courierCode===courier)
+                if(svcs.length===0)return null
+                return <div key={courier}>
+                  <p style={{margin:'0 0 7px',fontSize:10,fontWeight:700,color:C.ink4,letterSpacing:'0.06em',textTransform:'uppercase',display:'flex',alignItems:'center',gap:6}}>
+                    <span style={{background:courier==='jne'?C.g800:'#E65100',color:'#fff',padding:'1px 6px',borderRadius:4,fontSize:9}}>{courier.toUpperCase()}</span>
+                  </p>
+                  {svcs.map((svc:any)=>{
+                    const key=`${svc.courierCode}-${svc.service}`
+                    const isSelected=selectedService?.courierCode===svc.courierCode&&selectedService?.service===svc.service
+                    return <label key={key} onClick={()=>{setSelectedService(svc);setShippingData((d:any)=>({...d,shipping:svc.service,shippingLabel:`${svc.courierName} ${svc.service}`,shippingCourier:svc.courierCode}))}} style={{display:'flex',alignItems:'center',gap:11,padding:'10px 12px',border:`1.5px solid ${isSelected?C.g500:C.ink6}`,background:isSelected?C.g50:C.white,borderRadius:10,cursor:'pointer',transition:'all 0.15s',marginBottom:6}}>
+                      <div style={{width:16,height:16,borderRadius:'50%',border:`2px solid ${isSelected?C.g600:C.ink4}`,background:isSelected?C.g600:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>{isSelected&&<div style={{width:6,height:6,borderRadius:'50%',background:'#fff'}}/>}</div>
+                      <span style={{fontSize:15}}>📦</span>
+                      <div style={{flex:1}}>
+                        <p style={{margin:'0 0 1px',fontSize:13,fontWeight:700,color:C.ink}}>{svc.courierName} {svc.service}</p>
+                        <p style={{margin:0,fontSize:11,color:C.ink4}}>{svc.description}{svc.etd?` · ${svc.etd}`:''}</p>
+                      </div>
+                      <span style={{fontSize:13,fontWeight:800,color:isSelected?C.g700:C.ink}}>{fmt(svc.cost)}</span>
+                    </label>
+                  })}
+                </div>
+              })}
             </div>
             <div style={{display:'flex',gap:11}}>
               <button onClick={()=>setStep(0)} style={{padding:'12px 20px',background:C.white,color:C.ink2,border:`1px solid ${C.ink5}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:'pointer'}}>← Back</button>
@@ -1181,7 +1203,7 @@ function AdminOrders({orders:initO,products:allProds=[]}:{orders:any[],products?
     setTrackingResi(resi)
     setTrackingData(null)
     try{
-      const res=await fetch(`/api/tracking?awb=${encodeURIComponent(resi)}&courier=jne`)
+      const res=await fetch(`/api/tracking?awb=${encodeURIComponent(resi)}&courier=${selected?.shipping_courier||'jne'}`)
       const d=await res.json()
       setTrackingData(d)
     }catch(e){setTrackingData({error:'Gagal mengambil data tracking'})}

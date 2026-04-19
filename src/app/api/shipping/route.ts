@@ -5,14 +5,14 @@ const ORIGIN_ID = '31555' // Tangerang Selatan
 
 export async function POST(req: Request) {
   try {
-    const { destination, weight = 500 } = await req.json()
+    const { destination, weight = 500, courier = 'jne' } = await req.json()
     if (!destination) return NextResponse.json({ error: 'destination required' }, { status: 400 })
 
     const body = new URLSearchParams()
     body.append('origin', ORIGIN_ID)
     body.append('destination', destination)
     body.append('weight', String(weight))
-    body.append('courier', 'jne')
+    body.append('courier', courier)
     body.append('price', 'lowest')
 
     const res = await fetch('https://rajaongkir.komerce.id/api/v1/calculate/domestic-cost', {
