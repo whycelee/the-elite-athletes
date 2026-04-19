@@ -388,7 +388,7 @@ function AboutPage({nav,cartCount}:{nav:(p:string,d?:any)=>void,cartCount:number
   </div>
 }
 
-function LandingPage({nav,addToCart,cartCount,products:extProducts}:{nav:(p:string,d?:any)=>void,addToCart:(item:any)=>void,cartCount:number,products?:any[]}) {
+function LandingPage({nav,addToCart,cartCount,products:extProducts,loaded}:{nav:(p:string,d?:any)=>void,addToCart:(item:any)=>void,cartCount:number,products?:any[],loaded?:boolean}) {
   const [scrolled,setScrolled]=useState(false)
   const [heroSlide,setHeroSlide]=useState(0)
   const [showCart,setShowCart]=useState(false)
@@ -436,7 +436,19 @@ function LandingPage({nav,addToCart,cartCount,products:extProducts}:{nav:(p:stri
           <button onClick={()=>nav('catalog')} style={{fontSize:13,fontWeight:600,color:C.g600,background:'none',border:'none',cursor:'pointer'}}>View All →</button>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:16}}>
-          {dbProducts.slice(0,24).map((p:any,i:number)=><MiniCard key={p.id+'-'+i} p={p} onView={()=>nav('detail',p)} onAdd={()=>handleAdd(p)}/>)}
+          {!loaded
+            ?Array.from({length:8}).map((_,i)=>(
+              <div key={i} style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:16,overflow:'hidden'}}>
+                <div style={{height:200,background:`linear-gradient(90deg,${C.cream} 25%,${C.white} 50%,${C.cream} 75%)`,backgroundSize:'200% 100%',animation:'shimmer 1.5s infinite'}}/>
+                <div style={{padding:'14px 16px',display:'flex',flexDirection:'column',gap:8}}>
+                  <div style={{height:10,background:C.cream,borderRadius:4,width:'40%'}}/>
+                  <div style={{height:14,background:C.cream,borderRadius:4,width:'80%'}}/>
+                  <div style={{height:12,background:C.cream,borderRadius:4,width:'50%'}}/>
+                </div>
+              </div>
+            ))
+            :dbProducts.slice(0,24).map((p:any,i:number)=><MiniCard key={p.id+'-'+i} p={p} onView={()=>nav('detail',p)} onAdd={()=>handleAdd(p)}/>)
+          }
         </div>
         <div style={{textAlign:'center',marginTop:24}}>
           <button onClick={()=>nav('catalog')} style={{background:C.g800,color:'#fff',border:'none',borderRadius:10,padding:'12px 32px',fontSize:14,fontWeight:600,cursor:'pointer'}}>Lihat Semua Produk →</button>
@@ -2713,6 +2725,7 @@ export default function App() {
       @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
       @keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
       ::-webkit-scrollbar{width:5px;height:5px}
       ::-webkit-scrollbar-thumb{background:#D4D4CC;border-radius:3px}
       ::-webkit-scrollbar-track{background:transparent}
@@ -2733,7 +2746,7 @@ export default function App() {
       }
     `}</style>
 
-    {route==='home'    && <LandingPage  nav={nav} addToCart={addToCart} cartCount={cartCount} products={globalProducts}/>}
+    {route==='home'    && <LandingPage  nav={nav} addToCart={addToCart} cartCount={cartCount} products={globalProducts} loaded={productsFetched}/>}
     {route==='catalog' && <CatalogPage  nav={nav} addToCart={addToCart} cartCount={cartCount} products={globalProducts}/>}
     {route==='about'    && <AboutPage nav={nav} cartCount={globalCart.length}/>}
     {route==='athletes' && <OurAthletesPage nav={nav} cartCount={globalCart.length}/>}
