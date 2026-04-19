@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server'
 
 const RAJAONGKIR_KEY = process.env.RAJAONGKIR_API_KEY!
-const ORIGIN_ID = '31555' // Tangerang Selatan
+const DEFAULT_ORIGIN_ID = '31555' // Tangerang Selatan fallback
 
 export async function POST(req: Request) {
   try {
-    const { destination, weight = 500, courier = 'jne' } = await req.json()
+    const { destination, weight = 500, courier = 'jne', originId } = await req.json()
     if (!destination) return NextResponse.json({ error: 'destination required' }, { status: 400 })
 
     const body = new URLSearchParams()
-    body.append('origin', ORIGIN_ID)
-    body.append('destination', destination)
+    body.append('origin', originId || DEFAULT_ORIGIN_ID)
+    body.append('destination', String(destination))
     body.append('weight', String(weight))
     body.append('courier', courier)
     body.append('price', 'lowest')

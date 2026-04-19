@@ -984,27 +984,46 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
                   {destResults.map((r:any)=>(
                     <div key={r.id} onClick={async()=>{
                       setSelectedDest(r)
-                      setDestSearch(`${r.subdistrict_name}, ${r.city_name}`)
+                      setDestSearch(r.isManual?r.subdistrict_name:`${r.subdistrict_name}, ${r.city_name}`)
                       setDestResults([])
-                      setShippingData((d:any)=>({...d,city:r.city_name,province:r.province_name,destId:r.id}))
-                      // Fetch JNE + Wahana rates
+                      setShippingData((d:any)=>({...d,city:r.city_name||r.subdistrict_name,province:r.province_name,destId:r.id}))
+                      // Fetch shipping rates based on active couriers in Settings
                       setShippingLoading(true)
                       try{
+                        const cfg=typeof window!=='undefined'?loadSettings():DEFAULT_SETTINGS
                         const w=cart.reduce((s:number,item:any)=>(s+(item.weight||500)*(item.qty||1)),0)
-                        const [jneRes,wahanaRes]=await Promise.all([
-                          fetch('/api/shipping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({destination:r.id,weight:w,courier:'jne'})}),
-                          fetch('/api/shipping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({destination:r.id,weight:w,courier:'wahana'})})
-                        ])
-                        const jneData=await jneRes.json()
-                        const wahanaData=await wahanaRes.json()
-                        const jne=(jneData.data||[]).map((s:any)=>({...s,courierCode:'jne',courierName:'JNE'}))
-                        const wahana=(wahanaData.data||[]).map((s:any)=>({...s,courierCode:'wahana',courierName:'Wahana'}))
-                        setShippingServices([...jne,...wahana])
+                        if(cfg.shippingProvider==='manual'){
+                          // Manual flat rate
+                          const svcs=[]
+                          if(cfg.courierJNE) svcs.push({service:'REG',description:'Regular',etd:'2-3 hari',cost:cfg.flatRateJNE,courierCode:'jne',courierName:'JNE'})
+                          if(cfg.courierWahana) svcs.push({service:'REG',description:'Regular',etd:'3-5 hari',cost:cfg.flatRateWahana,courierCode:'wahana',courierName:'Wahana'})
+                          setShippingServices(svcs)
+                        } else {
+                          const couriers=[]
+                          if(cfg.courierJNE) couriers.push('jne')
+                          if(cfg.courierWahana) couriers.push('wahana')
+                          if(cfg.courierSiCepat) couriers.push('sicepat')
+                          if(cfg.courierJT) couriers.push('jnt')
+                          if(cfg.courierAnterAja) couriers.push('anteraja')
+                          const results=await Promise.allSettled(
+                            couriers.map(c=>fetch('/api/shipping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({destination:r.id,weight:w,courier:c,originId:cfg.originId||'31555'})}).then(res=>res.json()).then(d=>(d.data||[]).map((s:any)=>({...s,courierCode:c,courierName:c==='jne'?'JNE':c==='wahana'?'Wahana':c==='sicepat'?'SiCepat':c==='jnt'?'J&T':'AnterAja'}))))
+                          )
+                          const all=results.flatMap(r=>r.status==='fulfilled'?r.value:[])
+                          if(all.length>0){
+                            setShippingServices(all)
+                          } else {
+                            // API limit fallback - show manual flat rates
+                            const fallback=[]
+                            if(cfg.courierJNE) fallback.push({service:'REG',description:'Regular (tarif estimasi)',etd:'2-3 hari',cost:cfg.flatRateJNE||25000,courierCode:'jne',courierName:'JNE'})
+                            if(cfg.courierWahana) fallback.push({service:'REG',description:'Regular (tarif estimasi)',etd:'3-5 hari',cost:cfg.flatRateWahana||20000,courierCode:'wahana',courierName:'Wahana'})
+                            setShippingServices(fallback)
+                          }
+                        }
                       }catch(e){}
                       setShippingLoading(false)
                     }} style={{padding:'9px 14px',cursor:'pointer',borderBottom:`1px solid ${C.ink6}`}} onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background=C.cream} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=''}>
                       <div style={{fontWeight:600,color:C.ink,fontSize:13}}>{r.subdistrict_name}</div>
-                      <div style={{color:C.ink4,fontSize:11}}>{r.city_name} · {r.province_name}</div>
+                      {r.isManual?<div style={{color:C.amber,fontSize:11}}>⚠️ Input manual — ongkir pakai tarif estimasi</div>:<div style={{color:C.ink4,fontSize:11}}>{r.city_name} · {r.province_name}</div>}
                     </div>
                   ))}
                 </div>}
@@ -1098,7 +1117,7 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
 // ═══════════════════════════════════════════════════════════
 // ADMIN LAYOUT + PAGES
 // ═══════════════════════════════════════════════════════════
-const ADMIN_NAV=[{id:'overview',icon:'◈',label:'Overview'},{id:'orders',icon:'📋',label:'Orders'},{id:'inventory',icon:'📦',label:'Inventory'},{id:'customers',icon:'👥',label:'Customers'},{id:'financial',icon:'📊',label:'Financial'},{id:'content',icon:'🖼️',label:'Content'},{id:'integrations',icon:'🔌',label:'Integrations'}]
+const ADMIN_NAV=[{id:'overview',icon:'◈',label:'Overview'},{id:'orders',icon:'📋',label:'Orders'},{id:'inventory',icon:'📦',label:'Inventory'},{id:'customers',icon:'👥',label:'Customers'},{id:'financial',icon:'📊',label:'Financial'},{id:'content',icon:'🖼️',label:'Content'},{id:'integrations',icon:'🔌',label:'Integrations'},{id:'settings',icon:'⚙️',label:'Settings'}]
 const STATUS_FLOW:Record<string,string[]>={pending:['processing','cancelled'],processing:['shipped','cancelled'],shipped:['delivered'],delivered:[],cancelled:[]}
 
 function AdminLayout({page,setPage,children,nav,collapsed,setCollapsed}:{page:string,setPage:(p:string)=>void,children:React.ReactNode,nav:(p:string,d?:any)=>void,collapsed:boolean,setCollapsed:(c:boolean)=>void}) {
@@ -2455,6 +2474,199 @@ function AdminContent() {
 }
 
 
+// ═══════════════════════════════════════════════════════════
+// ADMIN: SETTINGS
+// ═══════════════════════════════════════════════════════════
+const DEFAULT_SETTINGS = {
+  // Store
+  storeName: 'The Elite Athletes',
+  storeWA: '6281234567890',
+  storeAddress: 'Tangerang Selatan, Banten',
+  storeEmail: 'admin@theeliteathletes.id',
+  // Shipping origin
+  originCity: 'Tangerang Selatan',
+  originId: '31555',
+  // Couriers ON/OFF
+  courierJNE: true,
+  courierWahana: true,
+  courierSiCepat: false,
+  courierJT: false,
+  courierAnterAja: false,
+  // Flat rate fallback (when API limit)
+  useFlatRate: false,
+  flatRateJNE: 25000,
+  flatRateWahana: 20000,
+  // Shipping API
+  shippingProvider: 'rajaongkir', // rajaongkir | biteship | manual
+  rajaongkirKey: '',
+  biteshipKey: '',
+}
+
+function loadSettings(): typeof DEFAULT_SETTINGS {
+  try {
+    const s = localStorage.getItem('tea_settings')
+    if (s) return { ...DEFAULT_SETTINGS, ...JSON.parse(s) }
+  } catch {}
+  return { ...DEFAULT_SETTINGS }
+}
+
+function saveSettings(s: typeof DEFAULT_SETTINGS) {
+  try { localStorage.setItem('tea_settings', JSON.stringify(s)) } catch {}
+}
+
+// Global settings - accessible by checkout
+let SITE_SETTINGS = typeof window !== 'undefined' ? loadSettings() : { ...DEFAULT_SETTINGS }
+
+function AdminSettings() {
+  const [s, setS] = useState<typeof DEFAULT_SETTINGS>(loadSettings)
+  const [saved, setSaved] = useState(false)
+  const [tab, setTab] = useState('store')
+
+  function save(newS: typeof DEFAULT_SETTINGS) {
+    setS(newS)
+    saveSettings(newS)
+    SITE_SETTINGS = newS
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+  }
+
+  function upd(key: keyof typeof DEFAULT_SETTINGS, val: any) {
+    const newS = { ...s, [key]: val }
+    setS(newS)
+    saveSettings(newS)
+    SITE_SETTINGS = newS
+  }
+
+  const TABS = [['store','🏪 Toko'],['shipping','📦 Pengiriman'],['couriers','🚚 Kurir']]
+
+  return <div style={{display:'flex',flexDirection:'column',gap:14}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <h3 style={{margin:0,fontSize:16,fontWeight:700,color:C.ink}}>⚙️ Settings</h3>
+      {saved&&<span style={{fontSize:12,color:C.g600,fontWeight:700}}>✓ Tersimpan!</span>}
+    </div>
+
+    {/* TABS */}
+    <div style={{display:'flex',gap:7}}>
+      {TABS.map(([id,label])=>(
+        <button key={id} onClick={()=>setTab(id)} style={{padding:'8px 16px',borderRadius:9,fontSize:12,fontWeight:tab===id?700:500,cursor:'pointer',background:tab===id?C.g800:C.white,color:tab===id?'#fff':C.ink2,border:`1px solid ${tab===id?C.g800:C.ink5}`}}>{label}</button>
+      ))}
+    </div>
+
+    {/* STORE SETTINGS */}
+    {tab==='store'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:14,padding:'20px 22px',display:'flex',flexDirection:'column',gap:14}}>
+      <h4 style={{margin:'0 0 4px',fontSize:14,fontWeight:700,color:C.ink}}>🏪 Informasi Toko</h4>
+      {([
+        ['storeName','Nama Toko','The Elite Athletes'],
+        ['storeWA','Nomor WhatsApp (62xxx)','6281234567890'],
+        ['storeEmail','Email Admin','admin@theeliteathletes.id'],
+        ['storeAddress','Alamat Toko / Gudang','Tangerang Selatan, Banten'],
+      ] as [keyof typeof DEFAULT_SETTINGS, string, string][]).map(([key,label,ph])=>(
+        <div key={key} style={{display:'flex',flexDirection:'column',gap:4}}>
+          <label style={{fontSize:12,fontWeight:600,color:C.ink3}}>{label}</label>
+          <input value={String(s[key])} onChange={e=>upd(key,e.target.value)} placeholder={ph} style={{padding:'9px 12px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:13,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+        </div>
+      ))}
+      <button onClick={()=>save(s)} style={{alignSelf:'flex-start',padding:'9px 22px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>Simpan</button>
+    </div>}
+
+    {/* SHIPPING SETTINGS */}
+    {tab==='shipping'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:14,padding:'20px 22px',display:'flex',flexDirection:'column',gap:16}}>
+      <h4 style={{margin:'0 0 4px',fontSize:14,fontWeight:700,color:C.ink}}>📦 Pengaturan Pengiriman</h4>
+
+      {/* ORIGIN */}
+      <div style={{background:C.cream,borderRadius:10,padding:'14px 16px'}}>
+        <p style={{margin:'0 0 12px',fontSize:12,fontWeight:700,color:C.ink3}}>📍 Asal Pengiriman (Gudang)</p>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div style={{display:'flex',flexDirection:'column',gap:4}}>
+            <label style={{fontSize:11,fontWeight:600,color:C.ink4}}>Nama Kota</label>
+            <input value={s.originCity} onChange={e=>upd('originCity',e.target.value)} placeholder="Tangerang Selatan" style={{padding:'8px 11px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:4}}>
+            <label style={{fontSize:11,fontWeight:600,color:C.ink4}}>Origin ID (RajaOngkir)</label>
+            <input value={s.originId} onChange={e=>upd('originId',e.target.value)} placeholder="31555" style={{padding:'8px 11px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink}}/>
+            <span style={{fontSize:10,color:C.ink4}}>Cari ID kota di dashboard RajaOngkir</span>
+          </div>
+        </div>
+      </div>
+
+      {/* SHIPPING PROVIDER */}
+      <div style={{background:C.cream,borderRadius:10,padding:'14px 16px'}}>
+        <p style={{margin:'0 0 12px',fontSize:12,fontWeight:700,color:C.ink3}}>🔌 Provider API Ongkir</p>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {[
+            ['rajaongkir','RajaOngkir Komerce','Limit 5.000 req/hari (gratis)'],
+            ['biteship','Biteship','Lebih banyak kurir, quota lebih besar'],
+            ['manual','Tarif Manual','Tanpa API — set flat rate per kurir'],
+          ].map(([id,name,desc])=>(
+            <label key={id} onClick={()=>upd('shippingProvider',id)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',border:`1.5px solid ${s.shippingProvider===id?C.g500:C.ink6}`,background:s.shippingProvider===id?C.g50:C.white,borderRadius:10,cursor:'pointer'}}>
+              <div style={{width:16,height:16,borderRadius:'50%',border:`2px solid ${s.shippingProvider===id?C.g600:C.ink4}`,background:s.shippingProvider===id?C.g600:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                {s.shippingProvider===id&&<div style={{width:6,height:6,borderRadius:'50%',background:'#fff'}}/>}
+              </div>
+              <div>
+                <p style={{margin:0,fontSize:13,fontWeight:700,color:C.ink}}>{name}</p>
+                <p style={{margin:0,fontSize:11,color:C.ink4}}>{desc}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        {s.shippingProvider==='rajaongkir'&&<div style={{marginTop:12}}>
+          <label style={{fontSize:11,fontWeight:600,color:C.ink4,display:'block',marginBottom:4}}>API Key RajaOngkir</label>
+          <input value={s.rajaongkirKey} onChange={e=>upd('rajaongkirKey',e.target.value)} placeholder="WXXx3GfX2c0aab..." type="password" style={{width:'100%',padding:'8px 11px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'monospace',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
+          <p style={{margin:'4px 0 0',fontSize:10,color:C.ink4}}>Diset juga di Vercel Environment Variables sebagai RAJAONGKIR_API_KEY</p>
+        </div>}
+
+        {s.shippingProvider==='biteship'&&<div style={{marginTop:12}}>
+          <label style={{fontSize:11,fontWeight:600,color:C.ink4,display:'block',marginBottom:4}}>API Key Biteship</label>
+          <input value={s.biteshipKey} onChange={e=>upd('biteshipKey',e.target.value)} placeholder="biteship_..." type="password" style={{width:'100%',padding:'8px 11px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'monospace',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
+        </div>}
+
+        {s.shippingProvider==='manual'&&<div style={{marginTop:12,display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div>
+            <label style={{fontSize:11,fontWeight:600,color:C.ink4,display:'block',marginBottom:4}}>Flat Rate JNE (Rp)</label>
+            <input type="number" value={s.flatRateJNE} onChange={e=>upd('flatRateJNE',parseInt(e.target.value)||0)} style={{width:'100%',padding:'8px 11px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
+          </div>
+          <div>
+            <label style={{fontSize:11,fontWeight:600,color:C.ink4,display:'block',marginBottom:4}}>Flat Rate Wahana (Rp)</label>
+            <input type="number" value={s.flatRateWahana} onChange={e=>upd('flatRateWahana',parseInt(e.target.value)||0)} style={{width:'100%',padding:'8px 11px',border:`1px solid ${C.ink5}`,borderRadius:8,fontSize:12,fontFamily:'inherit',outline:'none',color:C.ink,boxSizing:'border-box' as any}}/>
+          </div>
+          <p style={{gridColumn:'1/-1',margin:0,fontSize:10,color:C.ink4}}>Mode manual: customer pilih kurir, ongkir langsung pakai tarif flat ini</p>
+        </div>}
+      </div>
+      <button onClick={()=>save(s)} style={{alignSelf:'flex-start',padding:'9px 22px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>Simpan</button>
+    </div>}
+
+    {/* COURIERS */}
+    {tab==='couriers'&&<div style={{background:C.white,border:`1px solid ${C.ink6}`,borderRadius:14,padding:'20px 22px',display:'flex',flexDirection:'column',gap:14}}>
+      <h4 style={{margin:'0 0 4px',fontSize:14,fontWeight:700,color:C.ink}}>🚚 Kurir yang Aktif</h4>
+      <p style={{margin:'0 0 4px',fontSize:12,color:C.ink4}}>Kurir yang diaktifkan akan muncul di halaman checkout customer</p>
+      {([
+        ['courierJNE','JNE','Jangkauan luas, andalan Indonesia','jne'],
+        ['courierWahana','Wahana','Tarif ekonomis, khususnya Jabodetabek','wahana'],
+        ['courierSiCepat','SiCepat','Pengiriman cepat, populer di Jawa','sicepat'],
+        ['courierJT','J&T Express','Pickup gratis, jangkauan luas','jnt'],
+        ['courierAnterAja','AnterAja','Kurir baru, tarif kompetitif','anteraja'],
+      ] as [keyof typeof DEFAULT_SETTINGS,string,string,string][]).map(([key,name,desc,code])=>(
+        <div key={key} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 14px',background:C.cream,borderRadius:10,border:`1px solid ${s[key]?C.g300:C.ink6}`}}>
+          <div>
+            <p style={{margin:'0 0 2px',fontSize:13,fontWeight:700,color:C.ink}}>{name}</p>
+            <p style={{margin:0,fontSize:11,color:C.ink4}}>{desc} · kode: <code style={{background:C.ink6,padding:'1px 5px',borderRadius:3,fontSize:10}}>{code}</code></p>
+          </div>
+          <div onClick={()=>upd(key,!s[key])} style={{width:44,height:24,borderRadius:12,background:s[key]?C.g600:C.ink5,position:'relative',cursor:'pointer',transition:'background 0.2s',flexShrink:0}}>
+            <div style={{position:'absolute',top:2,left:s[key]?20:2,width:20,height:20,borderRadius:'50%',background:'#fff',transition:'left 0.2s'}}/>
+          </div>
+        </div>
+      ))}
+      <div style={{background:C.blueBg,borderRadius:10,padding:'12px 14px'}}>
+        <p style={{margin:'0 0 4px',fontSize:12,fontWeight:700,color:C.blue}}>ℹ️ Info</p>
+        <p style={{margin:0,fontSize:11,color:C.ink3}}>SiCepat, J&T, dan AnterAja memerlukan Biteship API atau RajaOngkir tier berbayar. Untuk gratis, gunakan JNE + Wahana saja.</p>
+      </div>
+      <button onClick={()=>save(s)} style={{alignSelf:'flex-start',padding:'9px 22px',background:C.g800,color:'#fff',border:'none',borderRadius:9,fontSize:13,fontWeight:700,cursor:'pointer'}}>Simpan</button>
+    </div>}
+  </div>
+}
+
+
 function AdminIntegrations() {
   const [saved,setSaved]=useState<Record<string,any>>({})
   const [active,setActive]=useState<any>(null)
@@ -2764,6 +2976,7 @@ export default function App() {
         {adminPage==='financial'    && <AdminFinancial orders={globalOrders} products={globalProducts}/>}
         {adminPage==='content'      && <AdminContent/>}
         {adminPage==='integrations' && <AdminIntegrations/>}
+        {adminPage==='settings'     && <AdminSettings/>}
       </AdminLayout>
     )}
   </>
