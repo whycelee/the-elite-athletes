@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       customer_name: customer?.name || '',
       customer_email: customer?.email || '',
       customer_phone: customer?.phone || phone || '',
-      shipping_address: customer?.address || '',
+      shipping_address: customer?.address || customer?.city || 'Alamat tidak diisi',
       shipping_city: customer?.city || '',
       shipping_province: customer?.province || province || '',
       shipping_courier: shipping?.courier || '',
