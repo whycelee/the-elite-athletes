@@ -17,8 +17,9 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { order_id, customer, items, subtotal, discount, shipping_cost, total, shipping, coupon, phone, province } = body
+    const { order_id, customer, items, subtotal, discount, shipping_cost, total, shipping, phone, province } = body
 
+    // Build insert with only safe columns
     const insertData: any = {
       id: order_id,
       customer_name: customer?.name || '',
@@ -29,28 +30,36 @@ export async function POST(req: Request) {
       subtotal: subtotal || 0,
       discount: discount || 0,
       shipping_cost: shipping_cost || 0,
-      shipping_courier: shipping?.courier || 'JNE',
+      shipping_courier: shipping?.courier || '',
       shipping_service: shipping?.service || '',
       total: total || 0,
-      coupon: coupon || null,
       status: 'pending',
       payment: null,
     }
 
-    // Only add address/city if columns exist — try with, fallback without
+    // Try adding optional columns one by one
+    const optionalCols: Record<string,any> = {
+      address: customer?.address || '',
+      city: customer?.city || '',
+      coupon: body.coupon || null,
+      resi: null,
+      paid_at: null,
+    }
+
+    // First try with all optional cols
     try {
-      insertData.address = customer?.address || ''
-      insertData.city = customer?.city || ''
       const { data, error } = await supabaseAdmin
-        .from('orders').insert(insertData).select().single()
+        .from('orders')
+        .insert({ ...insertData, ...optionalCols })
+        .select().single()
       if (error) throw error
       return NextResponse.json({ data, order_id })
     } catch {
-      // Fallback: remove address/city if column doesn't exist
-      delete insertData.address
-      delete insertData.city
+      // Retry with only base columns
       const { data, error } = await supabaseAdmin
-        .from('orders').insert(insertData).select().single()
+        .from('orders')
+        .insert(insertData)
+        .select().single()
       if (error) throw error
       return NextResponse.json({ data, order_id })
     }
