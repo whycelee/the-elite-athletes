@@ -1027,7 +1027,11 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
                     </div>
                   ))}
                 </div>}
-                {selectedDest&&<div style={{marginTop:6,fontSize:11,color:C.g600,fontWeight:600}}>✓ {selectedDest.subdistrict_name}, {selectedDest.city_name}</div>}
+                {selectedDest&&<div style={{marginTop:6,fontSize:11,color:C.g600,fontWeight:600}}>
+                  ✓ {selectedDest.isManual?destSearch:(`${selectedDest.subdistrict_name}, ${selectedDest.city_name}`)}
+                  {selectedDest.isManual&&<span style={{color:C.amber,marginLeft:6}}>· tarif estimasi</span>}
+                  <button onClick={()=>{setSelectedDest(null);setShippingServices([]);setSelectedService(null);setDestSearch('')}} style={{marginLeft:8,fontSize:10,color:C.ink4,background:'none',border:'none',cursor:'pointer'}}>✕ Ganti</button>
+                </div>}
               </div>
             </div>
             {/* SHIPPING SERVICES */}
