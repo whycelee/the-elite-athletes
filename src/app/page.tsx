@@ -1066,7 +1066,39 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
             </div>
             <div style={{display:'flex',gap:11}}>
               <button onClick={()=>setStep(0)} style={{padding:'12px 20px',background:C.white,color:C.ink2,border:`1px solid ${C.ink5}`,borderRadius:10,fontSize:13,fontWeight:600,cursor:'pointer'}}>← Back</button>
-              <button onClick={()=>{if(!shippingData.firstName||!shippingData.email||!shippingData.address||!selectedService||!selectedDest){alert('Lengkapi semua field wajib termasuk kota dan layanan pengiriman.')}else{setStep(2)}}} style={{flex:1,padding:'12px',background:C.g800,color:'#fff',border:'none',borderRadius:10,fontSize:13,fontWeight:700,cursor:'pointer'}}>Lanjut ke Pembayaran →</button>
+              <button onClick={()=>{
+                  const cfg=typeof window!=='undefined'?loadSettings():DEFAULT_SETTINGS
+                  if(!shippingData.firstName||!shippingData.email||!shippingData.address){alert('Lengkapi nama, email, dan alamat.');return}
+                  if(!destSearch||destSearch.length<2){alert('Isi kota tujuan pengiriman.');return}
+                  // In manual mode - build services and dest on the fly if not set
+                  let dest=selectedDest
+                  let service=selectedService
+                  let svcs=shippingServices
+                  if(cfg.shippingProvider==='manual'){
+                    if(!dest){
+                      dest={id:'manual',subdistrict_name:destSearch,city_name:destSearch,province_name:'',isManual:true}
+                      setSelectedDest(dest)
+                      setShippingData((d:any)=>({...d,city:destSearch}))
+                    }
+                    if(svcs.length===0){
+                      svcs=[]
+                      if(cfg.courierJNE) svcs.push({service:'REG',description:'Regular',etd:'2-3 hari',cost:cfg.flatRateJNE||25000,courierCode:'jne',courierName:'JNE'})
+                      if(cfg.courierWahana) svcs.push({service:'REG',description:'Regular',etd:'3-5 hari',cost:cfg.flatRateWahana||20000,courierCode:'wahana',courierName:'Wahana'})
+                      setShippingServices(svcs)
+                    }
+                    if(!service&&svcs.length>0){
+                      service=svcs[0]
+                      setSelectedService(service)
+                      setShippingData((d:any)=>({...d,shipping:service.service,shippingLabel:`${service.courierName} ${service.service}`,shippingCourier:service.courierCode}))
+                    }
+                    setTimeout(()=>setStep(2),50)
+                    return
+                  }
+                  // API mode validation
+                  if(!dest){alert('Pilih kota dari daftar.');return}
+                  if(!service){alert('Pilih layanan pengiriman.');return}
+                  setStep(2)
+                }} style={{flex:1,padding:'12px',background:C.g800,color:'#fff',border:'none',borderRadius:10,fontSize:13,fontWeight:700,cursor:'pointer'}}>Lanjut ke Pembayaran →</button>
             </div>
           </div>}
           {step===2&&<div style={{display:'flex',flexDirection:'column',gap:18}}>
