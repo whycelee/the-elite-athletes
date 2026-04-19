@@ -778,8 +778,21 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
       })
       const data=await res.json()
       if(!res.ok) throw new Error(data.error||'Gagal membuat order')
+      // Generate Midtrans Snap token
+      const snapRes=await fetch('/api/snap',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          order_id:data.order_id,
+          amount:total,
+          customer:{name:shippingData.firstName+' '+shippingData.lastName,email:shippingData.email,phone:shippingData.phone},
+          items:cart.map((i:any)=>({id:i.id,sku:i.sku,name:i.name,price:i.price,qty:i.qty||1})),
+        })
+      })
+      const snapData=await snapRes.json()
       const snap=(window as any).snap
-      if(snap&&data.snap_token){
+      if(snap&&snapData.snap_token){
+        data.snap_token=snapData.snap_token
         snap.pay(data.snap_token,{
           onSuccess:(result:any)=>{
             setConfirmedOrder({id:data.order_id,date:new Date().toISOString(),email:shippingData.email,customerName:shippingData.firstName+' '+shippingData.lastName,phone:shippingData.phone,address:shippingData.address+', '+shippingData.city,province:selectedDest?.province_name||shippingData.province||'',payment:result.payment_type||paymentMethod,items:cart,total,status:'processing'})
@@ -847,13 +860,19 @@ function CheckoutPage({nav,cart:initCart,addToCart}:{nav:(p:string,d?:any)=>void
             <span style={{fontSize:10,fontWeight:800,letterSpacing:'0.08em',textTransform:'uppercase',padding:'4px 11px',borderRadius:20,background:C.blueBg,color:C.blue}}>Processing</span>
           </div>
           {confirmedOrder.items.map((item:any,i:number)=>(
-            <div key={i} style={{display:'flex',gap:9,marginBottom:7}}><span style={{fontSize:24}}>{item.emoji}</span><div style={{flex:1}}><p style={{margin:'0 0 1px',fontSize:12,fontWeight:700,color:C.ink}}>{item.name}</p><p style={{margin:0,fontSize:10,color:C.ink4}}>Size {item.size} · Qty {item.qty}</p></div><span style={{fontSize:12,fontWeight:700,color:C.ink}}>{fmt(item.price*(item.qty||1))}</span></div>
+            <div key={i} style={{display:'flex',gap:9,marginBottom:7}}>
+              <div style={{width:40,height:40,borderRadius:8,overflow:'hidden',background:C.cream,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                {item.image_url?<img src={item.image_url} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:20}}>{item.emoji||'👕'}</span>}
+              </div>
+              <div style={{flex:1}}><p style={{margin:'0 0 1px',fontSize:12,fontWeight:700,color:C.ink}}>{item.name}</p><p style={{margin:0,fontSize:10,color:C.ink4}}>Size {item.size} · {item.color?item.color+' · ':''} Qty {item.qty}</p></div>
+              <span style={{fontSize:12,fontWeight:700,color:C.ink}}>{fmt(item.price*(item.qty||1))}</span>
+            </div>
           ))}
           <div style={{borderTop:`1px solid ${C.ink6}`,paddingTop:9,marginTop:3,display:'flex',justifyContent:'space-between'}}><span style={{fontSize:13,fontWeight:700,color:C.ink}}>Total</span><span style={{fontSize:14,fontWeight:800,color:C.g700}}>{fmt(confirmedOrder.total)}</span></div>
         </div>
         <div style={{display:'flex',gap:11,justifyContent:'center',flexWrap:'wrap'}}>
           <button onClick={()=>nav('home')} style={{background:C.g800,color:'#fff',border:'none',borderRadius:10,padding:'12px 24px',fontSize:13,fontWeight:700,cursor:'pointer'}}>Kembali Belanja</button>
-          <button onClick={()=>nav('admin')} style={{background:C.white,color:C.ink2,border:`1px solid ${C.ink5}`,borderRadius:10,padding:'12px 24px',fontSize:13,fontWeight:600,cursor:'pointer'}}>Admin Panel</button>
+          <button onClick={()=>nav('catalog')} style={{background:C.white,color:C.ink2,border:`1px solid ${C.ink5}`,borderRadius:10,padding:'12px 24px',fontSize:13,fontWeight:600,cursor:'pointer'}}>Lihat Produk Lain</button>
         </div>
       </div>
     </div>
